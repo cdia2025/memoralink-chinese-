@@ -2,16 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { VocabularyItem, AiProvider } from '../types';
 import { analyzeWriting, createChatSession } from '../services/geminiService';
+import { storageService } from '../services/storageService';
 import { BrainCircuit, Loader2, CheckCircle2, Bookmark, ArrowRight, RefreshCw, AlertCircle, BookOpen, Check, Mic, MicOff } from 'lucide-react';
 
 interface QuizRoomProps {
   aiProvider: AiProvider;
 }
-
-// UPDATED KEYS
-const STORAGE_KEYS = {
-  VOCAB_LIB: 'memoralink_chinese_sys_vocab',
-};
 
 export const QuizRoom: React.FC<QuizRoomProps> = ({ aiProvider }) => {
   const [library, setLibrary] = useState<VocabularyItem[]>([]);
@@ -26,16 +22,9 @@ export const QuizRoom: React.FC<QuizRoomProps> = ({ aiProvider }) => {
   const [isListening, setIsListening] = useState(false);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.VOCAB_LIB);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setLibrary(parsed);
-        setSavedWords(new Set(parsed.map((i: any) => i.word)));
-      }
-    } catch (e) {
-      console.error("Failed to load library for quiz", e);
-    }
+    const vocab = storageService.getVocabulary();
+    setLibrary(vocab);
+    setSavedWords(new Set(vocab.map(i => i.word)));
   }, []);
 
   const toggleWord = (word: VocabularyItem) => {
@@ -47,13 +36,13 @@ export const QuizRoom: React.FC<QuizRoomProps> = ({ aiProvider }) => {
   };
 
   const handleSaveWord = (item: VocabularyItem) => {
-    const currentStorage = localStorage.getItem(STORAGE_KEYS.VOCAB_LIB);
-    let library: VocabularyItem[] = currentStorage ? JSON.parse(currentStorage) : [];
-    
-    if (!library.some(i => i.word === item.word)) {
-      library = [item, ...library];
-      localStorage.setItem(STORAGE_KEYS.VOCAB_LIB, JSON.stringify(library));
-      setSavedWords(prev => new Set(prev).add(item.word));
+    try {
+      const success = storageService.addVocabularyItem(item);
+      if (success) {
+        setSavedWords(prev => new Set(prev).add(item.word));
+      }
+    } catch (e: any) {
+      alert(e.message);
     }
   };
 

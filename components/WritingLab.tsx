@@ -1,18 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { analyzeWriting } from '../services/geminiService';
+import { storageService } from '../services/storageService';
 import { Loader2, CheckCircle2, ArrowRight, BookOpen, Bookmark, Check, Save, AlertCircle } from 'lucide-react';
 import { AiProvider, VocabularyItem, WritingEntry } from '../types';
 
 interface WritingLabProps {
   aiProvider: AiProvider;
 }
-
-// UPDATED KEYS
-const STORAGE_KEYS = {
-  VOCAB_LIB: 'memoralink_chinese_sys_vocab',
-  WRITING_LIB: 'memoralink_chinese_sys_writing'
-};
 
 export const WritingLab: React.FC<WritingLabProps> = ({ aiProvider }) => {
   const [text, setText] = useState('');
@@ -30,11 +25,8 @@ export const WritingLab: React.FC<WritingLabProps> = ({ aiProvider }) => {
   const [isAnalysisSaved, setIsAnalysisSaved] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.VOCAB_LIB);
-    if (saved) {
-      const parsed = JSON.parse(saved) as VocabularyItem[];
-      setSavedWords(new Set(parsed.map(i => i.word)));
-    }
+    const library = storageService.getVocabulary();
+    setSavedWords(new Set(library.map(i => i.word)));
   }, []);
 
   const handleAnalyze = async () => {
@@ -63,31 +55,34 @@ export const WritingLab: React.FC<WritingLabProps> = ({ aiProvider }) => {
   };
 
   const handleSaveWord = (item: VocabularyItem) => {
-    const currentStorage = localStorage.getItem(STORAGE_KEYS.VOCAB_LIB);
-    let library: VocabularyItem[] = currentStorage ? JSON.parse(currentStorage) : [];
-    if (!library.some(i => i.word === item.word)) {
-      library = [item, ...library];
-      localStorage.setItem(STORAGE_KEYS.VOCAB_LIB, JSON.stringify(library));
-      setSavedWords(prev => new Set(prev).add(item.word));
+    try {
+      const success = storageService.addVocabularyItem(item);
+      if (success) {
+        setSavedWords(prev => new Set(prev).add(item.word));
+      }
+    } catch (e: any) {
+      alert(e.message);
     }
   };
 
   const handleSaveAnalysis = () => {
     if (!result) return;
-    const entry: WritingEntry = {
-      id: Date.now().toString(),
-      originalText: text,
-      correction: result.correction,
-      improvedVersion: result.improvedVersion,
-      explanation: result.explanation,
-      context: context === '自訂 (Custom)' ? customContext : context,
-      date: new Date().toLocaleDateString()
-    };
-    const currentStorage = localStorage.getItem(STORAGE_KEYS.WRITING_LIB);
-    let library: WritingEntry[] = currentStorage ? JSON.parse(currentStorage) : [];
-    library = [entry, ...library];
-    localStorage.setItem(STORAGE_KEYS.WRITING_LIB, JSON.stringify(library));
-    setIsAnalysisSaved(true);
+    try {
+      const entry: WritingEntry = {
+        id: Date.now().toString(),
+        originalText: text,
+        correction: result.correction,
+        improvedVersion: result.improvedVersion,
+        explanation: result.explanation,
+        context: context === '自訂 (Custom)' ? customContext : context,
+        date: new Date().toLocaleDateString()
+      };
+      
+      storageService.addWritingEntry(entry);
+      setIsAnalysisSaved(true);
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   const handleSpeak = (text: string, lang: 'zh-CN' | 'zh-HK' = 'zh-HK') => {
@@ -96,7 +91,6 @@ export const WritingLab: React.FC<WritingLabProps> = ({ aiProvider }) => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = lang;
 
-      // Improved Voice Selection Logic
       const voices = window.speechSynthesis.getVoices();
       const targetVoice = voices.find(v => 
         v.lang.replace('_', '-').toLowerCase() === lang.toLowerCase() || 

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { TOPICS, VocabularyItem, AiProvider } from '../types';
 import { generateVocabularyByTopic, generateVocabularyFromList } from '../services/geminiService';
+import { storageService } from '../services/storageService';
 import { Loader2, Eye, EyeOff, BrainCircuit, Bookmark, Check, Upload, Zap, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface VocabularyBuilderProps {
@@ -10,39 +11,27 @@ interface VocabularyBuilderProps {
 
 type Mode = 'topic' | 'import';
 
-// UPDATED KEYS: distinct from English app
-const STORAGE_KEYS = {
-  VOCAB_LIB: 'memoralink_chinese_sys_vocab',
-  MODE: 'memoralink_chinese_sys_vocab_mode',
-  CACHE: 'memoralink_chinese_sys_vocab_cached_words'
-};
-
 export const VocabularyBuilder: React.FC<VocabularyBuilderProps> = ({ aiProvider }) => {
-  const [mode, setMode] = useState<Mode>(() => (sessionStorage.getItem(STORAGE_KEYS.MODE) as Mode) || 'topic');
+  const [mode, setMode] = useState<Mode>(() => storageService.getVocabMode());
   const [topic, setTopic] = useState<string>(TOPICS[0]);
   const [customTopic, setCustomTopic] = useState('');
   const [difficulty, setDifficulty] = useState<string>('中級 (Intermediate)');
   const [count, setCount] = useState<number>(3);
   const [importText, setImportText] = useState('');
-  const [words, setWords] = useState<VocabularyItem[]>(() => {
-    const cached = sessionStorage.getItem(STORAGE_KEYS.CACHE);
-    return cached ? JSON.parse(cached) : [];
-  });
+  const [words, setWords] = useState<VocabularyItem[]>(() => storageService.getVocabCache());
   const [loading, setLoading] = useState(false);
   const [revealedCards, setRevealedCards] = useState<Set<number>>(new Set());
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.VOCAB_LIB);
-    if (saved) {
-      const parsed = JSON.parse(saved) as VocabularyItem[];
-      setSavedWords(new Set(parsed.map(i => i.word)));
-    }
+    // Initial check for saved words in library
+    const library = storageService.getVocabulary();
+    setSavedWords(new Set(library.map(i => i.word)));
   }, []);
 
   useEffect(() => {
-    sessionStorage.setItem(STORAGE_KEYS.CACHE, JSON.stringify(words));
-    sessionStorage.setItem(STORAGE_KEYS.MODE, mode);
+    storageService.setVocabCache(words);
+    storageService.setVocabMode(mode);
   }, [words, mode]);
 
   const handleGenerate = async () => {
@@ -60,7 +49,6 @@ export const VocabularyBuilder: React.FC<VocabularyBuilderProps> = ({ aiProvider
         newWords = await generateVocabularyFromList(rawList, aiProvider);
       }
       
-      // Simple duplicate check on client side as a safety net
       const uniqueWords = newWords.filter((v, i, a) => a.findIndex(t => t.word === v.word) === i);
       setWords(uniqueWords);
       
@@ -78,7 +66,7 @@ export const VocabularyBuilder: React.FC<VocabularyBuilderProps> = ({ aiProvider
     if (confirm("確定清除所有卡片？")) {
       setWords([]);
       setRevealedCards(new Set());
-      sessionStorage.removeItem(STORAGE_KEYS.CACHE);
+      storageService.clearVocabCache();
     }
   };
 
@@ -89,12 +77,15 @@ export const VocabularyBuilder: React.FC<VocabularyBuilderProps> = ({ aiProvider
   };
 
   const handleSave = (item: VocabularyItem) => {
-    const currentStorage = localStorage.getItem(STORAGE_KEYS.VOCAB_LIB);
-    let library: VocabularyItem[] = currentStorage ? JSON.parse(currentStorage) : [];
-    if (!library.some(i => i.word === item.word)) {
-      library = [item, ...library];
-      localStorage.setItem(STORAGE_KEYS.VOCAB_LIB, JSON.stringify(library));
-      setSavedWords(prev => new Set(prev).add(item.word));
+    try {
+      const success = storageService.addVocabularyItem(item);
+      if (success) {
+        setSavedWords(prev => new Set(prev).add(item.word));
+      } else {
+        alert("此詞彙已存在於資料庫中。");
+      }
+    } catch (e: any) {
+      alert(e.message);
     }
   };
 
@@ -105,7 +96,6 @@ export const VocabularyBuilder: React.FC<VocabularyBuilderProps> = ({ aiProvider
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = lang;
 
-      // Improved Voice Selection Logic
       const voices = window.speechSynthesis.getVoices();
       const targetVoice = voices.find(v => 
         v.lang.replace('_', '-').toLowerCase() === lang.toLowerCase() || 

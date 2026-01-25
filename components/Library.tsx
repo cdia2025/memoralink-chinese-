@@ -1,16 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { VocabularyItem, WritingEntry, ClassicalEntry } from '../types';
+import { storageService } from '../services/storageService';
 import { Trash2, Eye, Search, Download, ChevronDown, ChevronUp, Upload, FileJson, Edit3, X, Check, Image, Maximize2, AlertTriangle } from 'lucide-react';
 
 type LibraryTab = 'vocabulary' | 'writing' | 'classical';
-
-// Unique keys specific to CHINESE SYSTEM to prevent conflict with English App
-const STORAGE_KEYS = {
-  VOCAB: 'memoralink_chinese_sys_vocab',
-  WRITING: 'memoralink_chinese_sys_writing',
-  CLASSICAL: 'memoralink_chinese_sys_classical'
-};
 
 export const Library: React.FC = () => {
   const [activeTab, setActiveTab] = useState<LibraryTab>('vocabulary');
@@ -33,29 +27,14 @@ export const Library: React.FC = () => {
   useEffect(() => { loadData(); }, []);
 
   const loadData = () => {
-    try {
-      const savedVocab = localStorage.getItem(STORAGE_KEYS.VOCAB);
-      if (savedVocab) setItems(JSON.parse(savedVocab));
-      const savedWriting = localStorage.getItem(STORAGE_KEYS.WRITING);
-      if (savedWriting) setWritingItems(JSON.parse(savedWriting));
-      const savedClassical = localStorage.getItem(STORAGE_KEYS.CLASSICAL);
-      if (savedClassical) setClassicalItems(JSON.parse(savedClassical));
-    } catch(e) { console.error("Failed to load library", e); }
+    setItems(storageService.getVocabulary());
+    setWritingItems(storageService.getWritingLogs());
+    setClassicalItems(storageService.getClassicalLogs());
   };
 
   const handleBackupData = () => {
     try {
-      const backupData = { 
-        version: 1, 
-        date: new Date().toISOString(), 
-        vocabulary: items, 
-        writingLogs: writingItems, 
-        classicalLogs: classicalItems 
-      };
-      
-      // Use Blob for larger file support instead of data URI
-      const jsonString = JSON.stringify(backupData, null, 2);
-      const blob = new Blob([jsonString], { type: "application/json" });
+      const blob = storageService.createBackup();
       const url = URL.createObjectURL(blob);
       
       const a = document.createElement('a'); 
@@ -73,7 +52,7 @@ export const Library: React.FC = () => {
 
   const handleRestoreClick = () => {
     if (fileInputRef.current) {
-        fileInputRef.current.value = ''; // Reset input to allow re-selecting same file
+        fileInputRef.current.value = ''; 
         fileInputRef.current.click();
     }
   };
@@ -81,11 +60,10 @@ export const Library: React.FC = () => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; if (!file) return;
     
-    // Optional: Warn if file size > 5MB (browser localStorage limit is usually around 5-10MB)
+    // Pre-check file size (5MB limit is typical for localStorage)
     if (file.size > 5 * 1024 * 1024) {
-       if (!confirm("⚠️ 警告：此備份檔案超過 5MB，可能會超出瀏覽器儲存上限導致還原失敗。是否仍要嘗試？")) {
-           return;
-       }
+       alert("⚠️ 警告：此備份檔案超過 5MB，超出瀏覽器儲存上限，無法還原。");
+       return;
     }
 
     const reader = new FileReader();
@@ -94,32 +72,13 @@ export const Library: React.FC = () => {
         const result = e.target?.result as string;
         const data = JSON.parse(result);
         
-        if (!data || typeof data !== 'object') throw new Error("Invalid Format");
-
-        // Try saving each section individually to handle potential errors better
-        try {
-            if (data.vocabulary && Array.isArray(data.vocabulary)) {
-                localStorage.setItem(STORAGE_KEYS.VOCAB, JSON.stringify(data.vocabulary));
-            }
-            if (data.writingLogs && Array.isArray(data.writingLogs)) {
-                localStorage.setItem(STORAGE_KEYS.WRITING, JSON.stringify(data.writingLogs));
-            }
-            if (data.classicalLogs && Array.isArray(data.classicalLogs)) {
-                localStorage.setItem(STORAGE_KEYS.CLASSICAL, JSON.stringify(data.classicalLogs));
-            }
-            
-            loadData(); 
-            alert("資料已成功還原！");
-        } catch (storageError: any) {
-            if (storageError.name === 'QuotaExceededError') {
-                alert("還原失敗：空間不足。您的備份檔案過大（可能包含太多高解析度圖片），超過了瀏覽器的儲存限制。");
-            } else {
-                throw storageError;
-            }
-        }
-      } catch (error) { 
+        storageService.restoreBackup(data);
+        loadData();
+        alert("資料已成功還原！");
+        
+      } catch (error: any) { 
         console.error(error);
-        alert("無效的備份檔案或檔案格式錯誤。"); 
+        alert(error.message || "無效的備份檔案或檔案格式錯誤。"); 
       }
     };
     reader.readAsText(file);
@@ -129,12 +88,8 @@ export const Library: React.FC = () => {
   const handleClearAllData = () => {
     if (confirm('⚠️ 警告：此動作將「永久刪除」所有詞彙卡、寫作紀錄及文言文解析資料。\n\n您確定要清空所有資料嗎？')) {
         if (confirm('再次確認：刪除後無法復原。真的要全部刪除嗎？')) {
-            localStorage.removeItem(STORAGE_KEYS.VOCAB);
-            localStorage.removeItem(STORAGE_KEYS.WRITING);
-            localStorage.removeItem(STORAGE_KEYS.CLASSICAL);
-            setItems([]);
-            setWritingItems([]);
-            setClassicalItems([]);
+            storageService.clearAllData();
+            loadData();
             alert('所有資料已清除。');
         }
     }
@@ -145,8 +100,8 @@ export const Library: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 1024 * 1024) {
-      alert("圖片大小限制為 1MB 以下，以避免瀏覽器儲存空間不足。");
+    if (file.size > 500 * 1024) {
+      alert("為節省空間，圖片大小限制為 500KB 以下。建議先壓縮圖片。");
       return;
     }
 
@@ -156,15 +111,11 @@ export const Library: React.FC = () => {
           const base64 = reader.result as string;
           const newItems = [...items];
           newItems[index].image = base64;
-          // Test save to catch quota errors early
-          localStorage.setItem(STORAGE_KEYS.VOCAB, JSON.stringify(newItems));
+          
+          storageService.saveVocabulary(newItems);
           setItems(newItems);
       } catch (e: any) {
-          if (e.name === 'QuotaExceededError') {
-              alert("儲存失敗：空間已滿。請刪除部分舊資料或圖片後再試。");
-          } else {
-              alert("儲存圖片時發生錯誤。");
-          }
+          alert(e.message || "儲存圖片時發生錯誤。");
       }
     };
     reader.readAsDataURL(file);
@@ -172,13 +123,20 @@ export const Library: React.FC = () => {
 
   const handleDelete = (index: number, type: LibraryTab) => {
     if (!confirm('確定刪除此項目？')) return;
+    
     if (type === 'vocabulary') {
-      const n = items.filter((_, i) => i !== index); setItems(n); localStorage.setItem(STORAGE_KEYS.VOCAB, JSON.stringify(n));
+      const n = items.filter((_, i) => i !== index); 
+      storageService.saveVocabulary(n);
+      setItems(n);
       if (focusItem && items[index] === focusItem) setFocusItem(null);
     } else if (type === 'writing') {
-       const n = writingItems.filter((_, i) => i !== index); setWritingItems(n); localStorage.setItem(STORAGE_KEYS.WRITING, JSON.stringify(n));
+       const n = writingItems.filter((_, i) => i !== index); 
+       storageService.saveWritingLogs(n);
+       setWritingItems(n);
     } else {
-       const n = classicalItems.filter((_, i) => i !== index); setClassicalItems(n); localStorage.setItem(STORAGE_KEYS.CLASSICAL, JSON.stringify(n));
+       const n = classicalItems.filter((_, i) => i !== index); 
+       storageService.saveClassicalLogs(n);
+       setClassicalItems(n);
     }
   };
 
@@ -186,7 +144,9 @@ export const Library: React.FC = () => {
   const saveTags = (index: number) => {
     const newItems = [...items];
     newItems[index].tags = tempTags.split(',').map(t => t.trim()).filter(t => t.length > 0);
-    setItems(newItems); localStorage.setItem(STORAGE_KEYS.VOCAB, JSON.stringify(newItems)); setEditingIndex(null);
+    storageService.saveVocabulary(newItems);
+    setItems(newItems);
+    setEditingIndex(null);
   };
 
   const handleExportCSV = () => {
@@ -205,7 +165,6 @@ export const Library: React.FC = () => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = lang; 
 
-      // Improved Voice Selection Logic
       const voices = window.speechSynthesis.getVoices();
       const targetVoice = voices.find(v => 
         v.lang.replace('_', '-').toLowerCase() === lang.toLowerCase() || 
@@ -220,19 +179,14 @@ export const Library: React.FC = () => {
     }
   };
 
-  // Safe Filter Logic to prevent blank screen crash
   const filteredVocab = items.filter(item => {
     if (!item) return false;
     const s = searchTerm.toLowerCase();
-    
-    // Defensive checks for missing properties
     const w = (item.word || '').toLowerCase();
     const d = (item.definition || '').toLowerCase();
     const t = item.tags && Array.isArray(item.tags) ? item.tags : [];
     
-    return w.includes(s) || 
-           d.includes(s) ||
-           t.some(tag => (tag || '').toLowerCase().includes(s));
+    return w.includes(s) || d.includes(s) || t.some(tag => (tag || '').toLowerCase().includes(s));
   });
   
   const toggleExpand = (id: string) => { const n = new Set(expandedItem); if(n.has(id)) n.delete(id); else n.add(id); setExpandedItem(n); };
@@ -332,7 +286,9 @@ export const Library: React.FC = () => {
         </>
       )}
 
-      {/* Classical Tab */}
+      {/* Classical Tab & Writing Tab... (Unchanged visual logic, but using updated handleDelete/handlers) */}
+      {/* ... (Existing Classical & Writing Tabs UI code remains the same, just using new handlers) ... */}
+      
       {activeTab === 'classical' && (
         <div className="space-y-4">
            {classicalItems.length === 0 && <div className="text-center text-slate-500 py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300">暫無文言文紀錄</div>}
@@ -370,7 +326,6 @@ export const Library: React.FC = () => {
         </div>
       )}
 
-      {/* Writing Tab */}
       {activeTab === 'writing' && (
         <div className="space-y-4">
            {writingItems.length === 0 && <div className="text-center text-slate-500 py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300">暫無寫作紀錄</div>}

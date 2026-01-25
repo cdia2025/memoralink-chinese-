@@ -1,18 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { analyzeClassicalChinese } from '../services/geminiService';
+import { storageService } from '../services/storageService';
 import { Loader2, ScrollText, BookOpen, Bookmark, Check, Save } from 'lucide-react';
 import { AiProvider, VocabularyItem, ClassicalEntry } from '../types';
 
 interface ClassicalModeProps {
   aiProvider: AiProvider;
 }
-
-// UPDATED KEYS
-const STORAGE_KEYS = {
-  VOCAB_LIB: 'memoralink_chinese_sys_vocab',
-  CLASSICAL_LIB: 'memoralink_chinese_sys_classical'
-};
 
 export const ClassicalMode: React.FC<ClassicalModeProps> = ({ aiProvider }) => {
   const [text, setText] = useState('');
@@ -27,11 +22,8 @@ export const ClassicalMode: React.FC<ClassicalModeProps> = ({ aiProvider }) => {
   const [isEntrySaved, setIsEntrySaved] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.VOCAB_LIB);
-    if (saved) {
-      const parsed = JSON.parse(saved) as VocabularyItem[];
-      setSavedWords(new Set(parsed.map(i => i.word)));
-    }
+    const library = storageService.getVocabulary();
+    setSavedWords(new Set(library.map(i => i.word)));
   }, []);
 
   const handleAnalyze = async () => {
@@ -50,30 +42,33 @@ export const ClassicalMode: React.FC<ClassicalModeProps> = ({ aiProvider }) => {
   };
 
   const handleSaveWord = (item: VocabularyItem) => {
-    const currentStorage = localStorage.getItem(STORAGE_KEYS.VOCAB_LIB);
-    let library: VocabularyItem[] = currentStorage ? JSON.parse(currentStorage) : [];
-    if (!library.some(i => i.word === item.word)) {
-      library = [item, ...library];
-      localStorage.setItem(STORAGE_KEYS.VOCAB_LIB, JSON.stringify(library));
-      setSavedWords(prev => new Set(prev).add(item.word));
+    try {
+      const success = storageService.addVocabularyItem(item);
+      if (success) {
+        setSavedWords(prev => new Set(prev).add(item.word));
+      }
+    } catch (e: any) {
+      alert(e.message);
     }
   };
 
   const handleSaveEntry = () => {
     if (!result) return;
-    const entry: ClassicalEntry = {
-      id: Date.now().toString(),
-      originalText: text,
-      translation: result.translation,
-      origin: result.origin,
-      usage: result.usage,
-      date: new Date().toLocaleDateString()
-    };
-    const currentStorage = localStorage.getItem(STORAGE_KEYS.CLASSICAL_LIB);
-    let library: ClassicalEntry[] = currentStorage ? JSON.parse(currentStorage) : [];
-    library = [entry, ...library];
-    localStorage.setItem(STORAGE_KEYS.CLASSICAL_LIB, JSON.stringify(library));
-    setIsEntrySaved(true);
+    try {
+      const entry: ClassicalEntry = {
+        id: Date.now().toString(),
+        originalText: text,
+        translation: result.translation,
+        origin: result.origin,
+        usage: result.usage,
+        date: new Date().toLocaleDateString()
+      };
+      
+      storageService.addClassicalEntry(entry);
+      setIsEntrySaved(true);
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   const handleSpeak = (content: string, lang: 'zh-CN' | 'zh-HK' = 'zh-HK') => {
@@ -82,7 +77,6 @@ export const ClassicalMode: React.FC<ClassicalModeProps> = ({ aiProvider }) => {
       const utterance = new SpeechSynthesisUtterance(content);
       utterance.lang = lang;
 
-      // Improved Voice Selection Logic
       const voices = window.speechSynthesis.getVoices();
       const targetVoice = voices.find(v => 
         v.lang.replace('_', '-').toLowerCase() === lang.toLowerCase() || 
