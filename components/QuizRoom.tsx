@@ -57,10 +57,10 @@ export const QuizRoom: React.FC<QuizRoomProps> = ({ aiProvider }) => {
     }
   };
 
-  const handleSpeak = (text: string) => {
+  const handleSpeak = (text: string, lang: 'zh-CN' | 'zh-HK' = 'zh-HK') => {
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-HK'; // Cantonese
+      utterance.lang = lang; 
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
     }
@@ -258,9 +258,10 @@ export const QuizRoom: React.FC<QuizRoomProps> = ({ aiProvider }) => {
                                <div className="flex items-center gap-2">
                                   <span className="font-bold text-slate-900">{wordItem.word}</span>
                                   {wordItem.phonetic && <span className="text-xs text-slate-500 font-mono bg-slate-200 px-1 rounded">粵: {wordItem.phonetic}</span>}
-                                  <button onClick={() => handleSpeak(wordItem.word)} className="p-1 text-slate-400 hover:text-indigo-600">
-                                    <Volume2 className="w-3 h-3" />
-                                  </button>
+                                  <div className="flex gap-1 ml-1">
+                                    <button onClick={() => handleSpeak(wordItem.word, 'zh-HK')} className="text-[10px] px-1.5 border rounded hover:bg-slate-100">粵</button>
+                                    <button onClick={() => handleSpeak(wordItem.word, 'zh-CN')} className="text-[10px] px-1.5 border rounded hover:bg-slate-100">普</button>
+                                  </div>
                                </div>
                                <button 
                                   onClick={() => handleSaveWord(wordItem)}

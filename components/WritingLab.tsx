@@ -90,11 +90,11 @@ export const WritingLab: React.FC<WritingLabProps> = ({ aiProvider }) => {
     setIsAnalysisSaved(true);
   };
 
-  const handleSpeak = (text: string) => {
+  const handleSpeak = (text: string, lang: 'zh-CN' | 'zh-HK' = 'zh-HK') => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-HK'; // Cantonese
+      utterance.lang = lang;
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -199,9 +199,10 @@ export const WritingLab: React.FC<WritingLabProps> = ({ aiProvider }) => {
                              <div className="flex items-center gap-2">
                                 <span className="font-bold text-slate-900">{wordItem.word}</span>
                                 {wordItem.phonetic && <span className="text-xs text-slate-500 font-mono bg-slate-200 px-1 rounded">粵: {wordItem.phonetic}</span>}
-                                <button onClick={() => handleSpeak(wordItem.word)} className="text-slate-400 hover:text-indigo-600 p-1">
-                                    <Volume2 className="w-4 h-4" />
-                                </button>
+                                <div className="flex gap-1 ml-1">
+                                    <button onClick={() => handleSpeak(wordItem.word, 'zh-HK')} className="text-[10px] px-1.5 border rounded hover:bg-slate-100">粵</button>
+                                    <button onClick={() => handleSpeak(wordItem.word, 'zh-CN')} className="text-[10px] px-1.5 border rounded hover:bg-slate-100">普</button>
+                                </div>
                              </div>
                              <button onClick={() => handleSaveWord(wordItem)} disabled={isSaved} className={`p-1.5 rounded-full ${isSaved ? 'text-emerald-500 bg-emerald-50' : 'text-indigo-600 border border-slate-200'}`}>{isSaved ? <Check className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}</button>
                           </div>

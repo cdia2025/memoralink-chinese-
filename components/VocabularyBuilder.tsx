@@ -98,11 +98,11 @@ export const VocabularyBuilder: React.FC<VocabularyBuilderProps> = ({ aiProvider
     }
   };
 
-  const handleSpeak = (text: string, e: React.MouseEvent) => {
+  const handleSpeak = (text: string, lang: 'zh-HK' | 'zh-CN', e: React.MouseEvent) => {
     e.stopPropagation();
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-HK'; // Default to Cantonese/Traditional
+      utterance.lang = lang;
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -165,10 +165,13 @@ export const VocabularyBuilder: React.FC<VocabularyBuilderProps> = ({ aiProvider
               <div className="p-5 bg-slate-50 border-b border-slate-100 flex justify-between items-start">
                 <div>
                   <h3 className="text-xl font-bold text-slate-900 mb-1">{item.word}</h3>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button onClick={(e) => handleSpeak(item.word, e)} className="p-1 text-slate-400 hover:text-indigo-600 rounded-full hover:bg-indigo-50 transition-colors" title="發音"><Volume2 className="w-4 h-4" /></button>
-                    {item.phonetic && <span className="text-xs text-slate-500 font-mono bg-slate-200 px-1 rounded">粵: {item.phonetic}</span>}
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                     <div className="flex gap-1">
+                        <button onClick={(e) => handleSpeak(item.word, 'zh-HK', e)} className="text-[10px] px-1.5 py-0.5 bg-white border rounded hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors">粵</button>
+                        <button onClick={(e) => handleSpeak(item.word, 'zh-CN', e)} className="text-[10px] px-1.5 py-0.5 bg-white border rounded hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors">普</button>
+                     </div>
                   </div>
+                  {item.phonetic && <span className="text-xs text-slate-500 font-mono bg-slate-200 px-1 rounded">粵: {item.phonetic}</span>}
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleSave(item)} disabled={isSaved} className={`p-1 rounded-full transition-colors ${isSaved ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}>

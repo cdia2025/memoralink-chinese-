@@ -115,11 +115,11 @@ export const Library: React.FC = () => {
     const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csvContent); link.download = "memoralink_chinese_vocab.csv"; link.click();
   };
 
-  const handleSpeak = (text: string) => {
+  const handleSpeak = (text: string, lang: 'zh-CN' | 'zh-HK' = 'zh-HK') => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-HK'; // Cantonese
+      utterance.lang = lang; 
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -165,13 +165,15 @@ export const Library: React.FC = () => {
                 {/* Header Row */}
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 mb-1">
                          <h3 className="text-lg font-bold">{item.word}</h3>
-                         <button onClick={(e) => { e.stopPropagation(); handleSpeak(item.word); }} className="text-slate-400 hover:text-indigo-600 p-1" title="朗讀">
-                            <Volume2 className="w-4 h-4" />
-                         </button>
                     </div>
-                    <span className="text-xs text-slate-500 font-mono">{item.phonetic}</span>
+                    {/* Speak Buttons */}
+                    <div className="flex gap-1 mb-1">
+                        <button onClick={(e) => { e.stopPropagation(); handleSpeak(item.word, 'zh-HK'); }} className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-600 rounded border border-slate-200 transition-colors">粵</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleSpeak(item.word, 'zh-CN'); }} className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-600 rounded border border-slate-200 transition-colors">普</button>
+                    </div>
+                    <span className="text-xs text-slate-500 font-mono block">{item.phonetic}</span>
                   </div>
                   <div className="flex gap-1">
                      <button onClick={() => setFocusItem(item)} className="p-1.5 text-slate-400 hover:text-indigo-600" title="專注模式"><Maximize2 className="w-4 h-4" /></button>
@@ -236,7 +238,10 @@ export const Library: React.FC = () => {
                      <div>
                         <div className="flex items-center gap-2 mb-1">
                             <p className="text-xs font-bold text-slate-500">原文</p>
-                            <button onClick={(e) => { e.stopPropagation(); handleSpeak(entry.originalText); }} className="text-slate-400 hover:text-indigo-600"><Volume2 className="w-3 h-3" /></button>
+                            <div className="flex gap-1 ml-2">
+                                <button onClick={(e) => { e.stopPropagation(); handleSpeak(entry.originalText, 'zh-HK'); }} className="text-[10px] px-1.5 border rounded hover:bg-slate-100">粵</button>
+                                <button onClick={(e) => { e.stopPropagation(); handleSpeak(entry.originalText, 'zh-CN'); }} className="text-[10px] px-1.5 border rounded hover:bg-slate-100">普</button>
+                            </div>
                         </div>
                         <p className="text-sm font-serif text-slate-800 leading-relaxed">{entry.originalText}</p>
                      </div>
@@ -308,9 +313,10 @@ export const Library: React.FC = () => {
                    <h2 className="text-4xl font-bold text-slate-900 mb-2">{focusItem.word}</h2>
                    <div className="flex items-center gap-3">
                       <span className="text-lg text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded">{focusItem.phonetic}</span>
-                      <button onClick={() => handleSpeak(focusItem.word)} className="p-2 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors">
-                         <Volume2 className="w-5 h-5" />
-                      </button>
+                      <div className="flex gap-2">
+                         <button onClick={() => handleSpeak(focusItem.word, 'zh-HK')} className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors text-xs font-bold">粵語</button>
+                         <button onClick={() => handleSpeak(focusItem.word, 'zh-CN')} className="px-3 py-1 bg-slate-50 text-slate-600 rounded-full hover:bg-slate-100 transition-colors text-xs font-bold">普通話</button>
+                      </div>
                    </div>
                 </div>
 

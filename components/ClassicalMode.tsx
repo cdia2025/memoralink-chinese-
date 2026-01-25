@@ -76,11 +76,11 @@ export const ClassicalMode: React.FC<ClassicalModeProps> = ({ aiProvider }) => {
     setIsEntrySaved(true);
   };
 
-  const handleSpeak = (content: string) => {
+  const handleSpeak = (content: string, lang: 'zh-CN' | 'zh-HK' = 'zh-HK') => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(content);
-      utterance.lang = 'zh-HK'; // Cantonese
+      utterance.lang = lang;
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -100,14 +100,10 @@ export const ClassicalMode: React.FC<ClassicalModeProps> = ({ aiProvider }) => {
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col">
             <div className="flex justify-between items-center mb-2">
                 <label className="block text-sm font-medium text-slate-700">文言文/古詩詞</label>
-                <button 
-                  onClick={() => handleSpeak(text)} 
-                  disabled={!text}
-                  className="text-slate-400 hover:text-amber-600 transition-colors p-1 rounded-full hover:bg-amber-50"
-                  title="粵語朗讀原文"
-                >
-                  <Volume2 className="w-5 h-5" />
-                </button>
+                <div className="flex gap-1">
+                    <button onClick={() => handleSpeak(text, 'zh-HK')} disabled={!text} className="text-xs px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded transition-colors">粵語朗讀</button>
+                    <button onClick={() => handleSpeak(text, 'zh-CN')} disabled={!text} className="text-xs px-2 py-1 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded transition-colors">普通話</button>
+                </div>
             </div>
             <textarea 
               value={text}
@@ -138,9 +134,10 @@ export const ClassicalMode: React.FC<ClassicalModeProps> = ({ aiProvider }) => {
               <div className="bg-white p-5 rounded-xl shadow-sm border border-l-4 border-l-amber-600 border-slate-200">
                 <h3 className="text-sm font-bold text-amber-800 uppercase tracking-wide mb-2 flex items-center gap-2">
                     <ScrollText className="w-4 h-4" /> 白話翻譯
-                    <button onClick={() => handleSpeak(result.translation)} className="p-1 hover:bg-amber-100 rounded-full text-amber-600 transition-colors" title="朗讀翻譯">
-                        <Volume2 className="w-4 h-4"/>
-                    </button>
+                    <div className="flex gap-1 ml-2">
+                        <button onClick={() => handleSpeak(result.translation, 'zh-HK')} className="text-[10px] px-1.5 border rounded hover:bg-amber-100 text-amber-800">粵</button>
+                        <button onClick={() => handleSpeak(result.translation, 'zh-CN')} className="text-[10px] px-1.5 border rounded hover:bg-amber-100 text-amber-800">普</button>
+                    </div>
                 </h3>
                 <p className="text-slate-800 leading-relaxed">{result.translation}</p>
               </div>
@@ -168,9 +165,10 @@ export const ClassicalMode: React.FC<ClassicalModeProps> = ({ aiProvider }) => {
                              <div className="flex items-center gap-2">
                                 <span className="font-bold text-slate-900">{wordItem.word}</span>
                                 {wordItem.phonetic && <span className="text-xs text-slate-500 font-mono bg-slate-200 px-1 rounded">粵: {wordItem.phonetic}</span>}
-                                <button onClick={() => handleSpeak(wordItem.word)} className="p-1 text-slate-400 hover:text-indigo-600 transition-colors" title="朗讀">
-                                    <Volume2 className="w-3 h-3" />
-                                </button>
+                                <div className="flex gap-1 ml-1">
+                                    <button onClick={() => handleSpeak(wordItem.word, 'zh-HK')} className="text-[10px] px-1.5 border rounded hover:bg-slate-200 text-slate-600">粵</button>
+                                    <button onClick={() => handleSpeak(wordItem.word, 'zh-CN')} className="text-[10px] px-1.5 border rounded hover:bg-slate-200 text-slate-600">普</button>
+                                </div>
                              </div>
                              <button onClick={() => handleSaveWord(wordItem)} disabled={isSaved} className={`p-1.5 rounded-full ${isSaved ? 'text-emerald-500 bg-emerald-50' : 'text-indigo-600 border border-slate-200'}`}>{isSaved ? <Check className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}</button>
                           </div>
