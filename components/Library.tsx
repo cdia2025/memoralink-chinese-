@@ -44,23 +44,83 @@ export const Library: React.FC = () => {
   };
 
   const handleBackupData = () => {
-    const backupData = { version: 1, date: new Date().toISOString(), vocabulary: items, writingLogs: writingItems, classicalLogs: classicalItems };
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
-    const a = document.createElement('a'); a.href = dataStr; a.download = `memoralink_chinese_sys_backup.json`; a.click();
+    try {
+      const backupData = { 
+        version: 1, 
+        date: new Date().toISOString(), 
+        vocabulary: items, 
+        writingLogs: writingItems, 
+        classicalLogs: classicalItems 
+      };
+      
+      // Use Blob for larger file support instead of data URI
+      const jsonString = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a'); 
+      a.href = url; 
+      a.download = `memoralink_chinese_sys_backup_${new Date().toISOString().slice(0,10)}.json`; 
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Backup failed", e);
+      alert("備份失敗：資料量可能過大，導致瀏覽器無法生成檔案。");
+    }
   };
 
-  const handleRestoreClick = () => fileInputRef.current?.click();
+  const handleRestoreClick = () => {
+    if (fileInputRef.current) {
+        fileInputRef.current.value = ''; // Reset input to allow re-selecting same file
+        fileInputRef.current.click();
+    }
+  };
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; if (!file) return;
+    
+    // Optional: Warn if file size > 5MB (browser localStorage limit is usually around 5-10MB)
+    if (file.size > 5 * 1024 * 1024) {
+       if (!confirm("⚠️ 警告：此備份檔案超過 5MB，可能會超出瀏覽器儲存上限導致還原失敗。是否仍要嘗試？")) {
+           return;
+       }
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = JSON.parse(e.target?.result as string);
-        if (data.vocabulary) localStorage.setItem(STORAGE_KEYS.VOCAB, JSON.stringify(data.vocabulary));
-        if (data.writingLogs) localStorage.setItem(STORAGE_KEYS.WRITING, JSON.stringify(data.writingLogs));
-        if (data.classicalLogs) localStorage.setItem(STORAGE_KEYS.CLASSICAL, JSON.stringify(data.classicalLogs));
-        loadData(); alert("資料已還原！");
-      } catch (error) { alert("無效的檔案"); }
+        const result = e.target?.result as string;
+        const data = JSON.parse(result);
+        
+        if (!data || typeof data !== 'object') throw new Error("Invalid Format");
+
+        // Try saving each section individually to handle potential errors better
+        try {
+            if (data.vocabulary && Array.isArray(data.vocabulary)) {
+                localStorage.setItem(STORAGE_KEYS.VOCAB, JSON.stringify(data.vocabulary));
+            }
+            if (data.writingLogs && Array.isArray(data.writingLogs)) {
+                localStorage.setItem(STORAGE_KEYS.WRITING, JSON.stringify(data.writingLogs));
+            }
+            if (data.classicalLogs && Array.isArray(data.classicalLogs)) {
+                localStorage.setItem(STORAGE_KEYS.CLASSICAL, JSON.stringify(data.classicalLogs));
+            }
+            
+            loadData(); 
+            alert("資料已成功還原！");
+        } catch (storageError: any) {
+            if (storageError.name === 'QuotaExceededError') {
+                alert("還原失敗：空間不足。您的備份檔案過大（可能包含太多高解析度圖片），超過了瀏覽器的儲存限制。");
+            } else {
+                throw storageError;
+            }
+        }
+      } catch (error) { 
+        console.error(error);
+        alert("無效的備份檔案或檔案格式錯誤。"); 
+      }
     };
     reader.readAsText(file);
   };
@@ -92,11 +152,20 @@ export const Library: React.FC = () => {
 
     const reader = new FileReader();
     reader.onloadend = () => {
-      const base64 = reader.result as string;
-      const newItems = [...items];
-      newItems[index].image = base64;
-      setItems(newItems);
-      localStorage.setItem(STORAGE_KEYS.VOCAB, JSON.stringify(newItems));
+      try {
+          const base64 = reader.result as string;
+          const newItems = [...items];
+          newItems[index].image = base64;
+          // Test save to catch quota errors early
+          localStorage.setItem(STORAGE_KEYS.VOCAB, JSON.stringify(newItems));
+          setItems(newItems);
+      } catch (e: any) {
+          if (e.name === 'QuotaExceededError') {
+              alert("儲存失敗：空間已滿。請刪除部分舊資料或圖片後再試。");
+          } else {
+              alert("儲存圖片時發生錯誤。");
+          }
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -151,11 +220,20 @@ export const Library: React.FC = () => {
     }
   };
 
-  const filteredVocab = items.filter(item => 
-    item.word.includes(searchTerm) || 
-    item.definition.includes(searchTerm) ||
-    (item.tags && item.tags.some(tag => tag.includes(searchTerm)))
-  );
+  // Safe Filter Logic to prevent blank screen crash
+  const filteredVocab = items.filter(item => {
+    if (!item) return false;
+    const s = searchTerm.toLowerCase();
+    
+    // Defensive checks for missing properties
+    const w = (item.word || '').toLowerCase();
+    const d = (item.definition || '').toLowerCase();
+    const t = item.tags && Array.isArray(item.tags) ? item.tags : [];
+    
+    return w.includes(s) || 
+           d.includes(s) ||
+           t.some(tag => (tag || '').toLowerCase().includes(s));
+  });
   
   const toggleExpand = (id: string) => { const n = new Set(expandedItem); if(n.has(id)) n.delete(id); else n.add(id); setExpandedItem(n); };
 
