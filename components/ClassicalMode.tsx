@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { analyzeClassicalChinese } from '../services/geminiService';
-import { Loader2, ScrollText, BookOpen, Bookmark, Check, Save, Volume2 } from 'lucide-react';
+import { Loader2, ScrollText, BookOpen, Bookmark, Check, Save } from 'lucide-react';
 import { AiProvider, VocabularyItem, ClassicalEntry } from '../types';
 
 interface ClassicalModeProps {

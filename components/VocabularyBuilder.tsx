@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { TOPICS, VocabularyItem, AiProvider } from '../types';
 import { generateVocabularyByTopic, generateVocabularyFromList } from '../services/geminiService';
-import { Loader2, Eye, EyeOff, BrainCircuit, Bookmark, Check, Volume2, Upload, Zap, RefreshCw, AlertCircle } from 'lucide-react';
+import { Loader2, Eye, EyeOff, BrainCircuit, Bookmark, Check, Upload, Zap, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface VocabularyBuilderProps {
   aiProvider: AiProvider;
