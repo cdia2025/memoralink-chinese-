@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { VocabularyItem, WritingEntry, ClassicalEntry } from '../types';
-import { Trash2, Eye, Search, Download, ChevronDown, ChevronUp, Upload, FileJson, Edit3, X, Check, Image, Maximize2 } from 'lucide-react';
+import { Trash2, Eye, Search, Download, ChevronDown, ChevronUp, Upload, FileJson, Edit3, X, Check, Image, Maximize2, AlertTriangle } from 'lucide-react';
 
 type LibraryTab = 'vocabulary' | 'writing' | 'classical';
 
@@ -63,6 +63,21 @@ export const Library: React.FC = () => {
       } catch (error) { alert("無效的檔案"); }
     };
     reader.readAsText(file);
+  };
+
+  // Clear All Data Logic
+  const handleClearAllData = () => {
+    if (confirm('⚠️ 警告：此動作將「永久刪除」所有詞彙卡、寫作紀錄及文言文解析資料。\n\n您確定要清空所有資料嗎？')) {
+        if (confirm('再次確認：刪除後無法復原。真的要全部刪除嗎？')) {
+            localStorage.removeItem(STORAGE_KEYS.VOCAB);
+            localStorage.removeItem(STORAGE_KEYS.WRITING);
+            localStorage.removeItem(STORAGE_KEYS.CLASSICAL);
+            setItems([]);
+            setWritingItems([]);
+            setClassicalItems([]);
+            alert('所有資料已清除。');
+        }
+    }
   };
 
   // Image Upload Logic for Vocabulary Cards
@@ -137,30 +152,37 @@ export const Library: React.FC = () => {
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
       
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h2 className="text-2xl font-bold text-slate-900">我的資料庫</h2>
-        <div className="flex gap-2">
-           <button onClick={handleBackupData} className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-200"><FileJson className="w-4 h-4 inline mr-1" /> 備份</button>
-           <button onClick={handleRestoreClick} className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-200"><Upload className="w-4 h-4 inline mr-1" /> 還原</button>
-           {activeTab === 'vocabulary' && <button onClick={handleExportCSV} className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold"><Download className="w-4 h-4 inline mr-1" /> CSV</button>}
+        <div className="flex flex-wrap gap-2">
+           <button onClick={handleBackupData} className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-200 hover:bg-indigo-100 transition-colors"><FileJson className="w-4 h-4 inline mr-1" /> 備份</button>
+           <button onClick={handleRestoreClick} className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-200 hover:bg-indigo-100 transition-colors"><Upload className="w-4 h-4 inline mr-1" /> 還原</button>
+           <button onClick={handleClearAllData} className="px-3 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold border border-red-200 hover:bg-red-100 hover:text-red-700 transition-colors"><Trash2 className="w-4 h-4 inline mr-1" /> 全部刪除</button>
+           {activeTab === 'vocabulary' && <button onClick={handleExportCSV} className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><Download className="w-4 h-4 inline mr-1" /> CSV</button>}
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 overflow-x-auto">
-         <button onClick={() => setActiveTab('vocabulary')} className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap ${activeTab === 'vocabulary' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'}`}>詞彙卡</button>
-         <button onClick={() => setActiveTab('classical')} className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap ${activeTab === 'classical' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'}`}>文言文解析</button>
-         <button onClick={() => setActiveTab('writing')} className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap ${activeTab === 'writing' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'}`}>寫作紀錄</button>
+         <button onClick={() => setActiveTab('vocabulary')} className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap ${activeTab === 'vocabulary' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'}`}>詞彙卡 ({items.length})</button>
+         <button onClick={() => setActiveTab('classical')} className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap ${activeTab === 'classical' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'}`}>文言文解析 ({classicalItems.length})</button>
+         <button onClick={() => setActiveTab('writing')} className={`px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap ${activeTab === 'writing' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'}`}>寫作紀錄 ({writingItems.length})</button>
       </div>
 
       {/* Vocabulary Tab */}
       {activeTab === 'vocabulary' && (
         <>
-          <div className="relative"><Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" /><input type="text" placeholder="搜尋詞彙或標籤 (Tag)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm" /></div>
+          <div className="relative"><Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" /><input type="text" placeholder="搜尋詞彙或標籤 (Tag)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 outline-none" /></div>
           
+          {items.length === 0 ? (
+            <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+               <AlertTriangle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+               <p className="text-slate-500">暫無詞彙卡，請前往「詞彙生成」製作。</p>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredVocab.map((item, index) => (
-              <div key={index} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 relative group flex flex-col h-full">
+              <div key={index} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 relative group flex flex-col h-full hover:shadow-md transition-shadow">
                 
                 {/* Header Row */}
                 <div className="flex justify-between items-start">
@@ -176,9 +198,9 @@ export const Library: React.FC = () => {
                     <span className="text-xs text-slate-500 font-mono block">{item.phonetic}</span>
                   </div>
                   <div className="flex gap-1">
-                     <button onClick={() => setFocusItem(item)} className="p-1.5 text-slate-400 hover:text-indigo-600" title="專注模式"><Maximize2 className="w-4 h-4" /></button>
-                     <button onClick={() => { const newS = new Set(revealedCards); if(newS.has(index)) newS.delete(index); else newS.add(index); setRevealedCards(newS); }} className="p-1.5 text-slate-400 hover:text-indigo-600"><Eye className="w-4 h-4" /></button>
-                     <button onClick={() => handleDelete(index, 'vocabulary')} className="p-1.5 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                     <button onClick={() => setFocusItem(item)} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors" title="專注模式"><Maximize2 className="w-4 h-4" /></button>
+                     <button onClick={() => { const newS = new Set(revealedCards); if(newS.has(index)) newS.delete(index); else newS.add(index); setRevealedCards(newS); }} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"><Eye className="w-4 h-4" /></button>
+                     <button onClick={() => handleDelete(index, 'vocabulary')} className="p-1.5 text-slate-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
 
@@ -204,7 +226,7 @@ export const Library: React.FC = () => {
                   {editingIndex === index ? (
                     <div className="flex items-center gap-1 w-full"><input autoFocus value={tempTags} onChange={e => setTempTags(e.target.value)} className="flex-1 text-xs border p-1 rounded" /><button onClick={() => saveTags(index)} className="text-indigo-600"><Check className="w-4 h-4" /></button></div>
                   ) : (
-                    <>{item.tags?.map((t, i) => <span key={i} className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded font-bold">{t}</span>)}<button onClick={() => startEditing(index, item.tags)} className="text-slate-300 hover:text-indigo-500 opacity-0 group-hover:opacity-100"><Edit3 className="w-3 h-3" /></button></>
+                    <>{item.tags?.map((t, i) => <span key={i} className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded font-bold">{t}</span>)}<button onClick={() => startEditing(index, item.tags)} className="text-slate-300 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"><Edit3 className="w-3 h-3" /></button></>
                   )}
                 </div>
 
@@ -216,13 +238,14 @@ export const Library: React.FC = () => {
               </div>
             ))}
           </div>
+          )}
         </>
       )}
 
       {/* Classical Tab */}
       {activeTab === 'classical' && (
         <div className="space-y-4">
-           {classicalItems.length === 0 && <div className="text-center text-slate-500 py-10">暫無文言文紀錄</div>}
+           {classicalItems.length === 0 && <div className="text-center text-slate-500 py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300">暫無文言文紀錄</div>}
            {classicalItems.map((entry, idx) => (
              <div key={entry.id} className="bg-white rounded-xl p-4 border shadow-sm">
                 <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleExpand(entry.id)}>
@@ -260,6 +283,7 @@ export const Library: React.FC = () => {
       {/* Writing Tab */}
       {activeTab === 'writing' && (
         <div className="space-y-4">
+           {writingItems.length === 0 && <div className="text-center text-slate-500 py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300">暫無寫作紀錄</div>}
            {writingItems.map((entry, idx) => (
              <div key={entry.id} className="bg-white rounded-xl p-4 border shadow-sm">
                 <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleExpand(entry.id)}>
