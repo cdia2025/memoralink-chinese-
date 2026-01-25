@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { AppView } from '../types';
-import { Brain, ArrowRight, ScrollText, Target, PenTool } from 'lucide-react';
+import { Brain, ArrowRight, ScrollText, PenTool } from 'lucide-react';
 
 interface DashboardProps {
   setView: (view: AppView) => void;

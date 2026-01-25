@@ -116,19 +116,8 @@ export const QuizRoom: React.FC<QuizRoomProps> = ({ aiProvider }) => {
     if (!userInput.trim()) return;
     setLoading(true);
     try {
-      const targetWords = selectedWords.map(w => w.word).join(', ');
-      // Modified Prompt to ensure vocabulary usage is checked
-      const prompt = `分析學生的回答：「${userInput}」。
-      背景情境：「${scenario}」。
-      
-      重要檢查：
-      1. 學生是否使用了必須詞彙：${targetWords}？如果沒有，請明確指出。
-      2. 語法是否正確？
-      3. 給出一個包含所有目標詞彙的完美範例句子。
-      
-      請將分析結果放入 explanation 欄位，並將範例放入 improvedVersion 欄位。`;
-      
-      const res = await analyzeWriting(userInput, `情境測驗檢討 (Quiz Review)`, aiProvider);
+      // Pass the scenario in the context so AI knows what to check against
+      const res = await analyzeWriting(userInput, `情境測驗檢討 (Quiz Review). 題目情境: ${scenario}`, aiProvider);
       setFeedback(res);
     } catch (e: any) {
       alert(`Analysis failed: ${e.message}`);

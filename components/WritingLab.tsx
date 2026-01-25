@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { analyzeWriting } from '../services/geminiService';
-import { Loader2, CheckCircle2, ArrowRight, PenTool, BookOpen, Bookmark, Check, Volume2, Save, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, ArrowRight, BookOpen, Bookmark, Check, Volume2, Save, AlertCircle } from 'lucide-react';
 import { AiProvider, VocabularyItem, WritingEntry } from '../types';
 
 interface WritingLabProps {

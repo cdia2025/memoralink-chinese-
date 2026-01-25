@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { VocabularyItem, WritingEntry, ClassicalEntry } from '../types';
-import { Trash2, Eye, Search, Volume2, Download, ChevronDown, ChevronUp, Upload, FileJson, Edit3, X, Check, Image, Maximize2, AlertCircle } from 'lucide-react';
+import { Trash2, Eye, Search, Volume2, Download, ChevronDown, ChevronUp, Upload, FileJson, Edit3, X, Check, Image, Maximize2 } from 'lucide-react';
 
 type LibraryTab = 'vocabulary' | 'writing' | 'classical';
 
