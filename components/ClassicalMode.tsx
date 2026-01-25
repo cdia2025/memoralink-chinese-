@@ -81,6 +81,18 @@ export const ClassicalMode: React.FC<ClassicalModeProps> = ({ aiProvider }) => {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(content);
       utterance.lang = lang;
+
+      // Improved Voice Selection Logic
+      const voices = window.speechSynthesis.getVoices();
+      const targetVoice = voices.find(v => 
+        v.lang.replace('_', '-').toLowerCase() === lang.toLowerCase() || 
+        (lang === 'zh-HK' && (v.name.includes('Cantonese') || v.name.includes('Hong Kong')))
+      );
+
+      if (targetVoice) {
+        utterance.voice = targetVoice;
+      }
+
       window.speechSynthesis.speak(utterance);
     }
   };
