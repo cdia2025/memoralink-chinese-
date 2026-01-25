@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AppView, AiProvider } from './types';
 import { Navigation } from './components/Navigation';
 import { Dashboard } from './components/Dashboard';
