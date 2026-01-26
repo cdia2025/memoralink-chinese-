@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => {
       'process.env.API_KEY': JSON.stringify(env.API_KEY),
       'process.env.DEEPSEEK_API_KEY': JSON.stringify(env.DEEPSEEK_API_KEY),
       'process.env.APP_PASSWORD': JSON.stringify(env.APP_PASSWORD),
+      'process.env.APP_PASSWORD_HINT': JSON.stringify(env.APP_PASSWORD_HINT),
     }
   };
 });

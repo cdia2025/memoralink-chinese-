@@ -9,17 +9,21 @@ import { OralCoach } from './components/OralCoach';
 import { Library } from './components/Library';
 import { QuizRoom } from './components/QuizRoom';
 import { ClassicalMode } from './components/ClassicalMode';
-import { Sparkles, Cpu, Lock, ArrowRight, BookOpen } from 'lucide-react';
+import { Sparkles, Cpu, Lock, ArrowRight, BookOpen, HelpCircle } from 'lucide-react';
 
 // Use environment variable or default to '8888'
 const APP_PASSWORD = process.env.APP_PASSWORD || '8888';
-const AUTH_KEY = 'memoralink_auth_token_v1';
+const PASSWORD_HINT = process.env.APP_PASSWORD_HINT;
+const AUTH_KEY = 'memoralink_auth_token_v2'; // Updated key version
 
 export default function App() {
   // Authentication State
+  // Logic: Check if the stored password matches the CURRENT environment password
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem(AUTH_KEY) === 'true';
+    const storedAuth = localStorage.getItem(AUTH_KEY);
+    return storedAuth === APP_PASSWORD;
   });
+  
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState(false);
 
@@ -30,7 +34,9 @@ export default function App() {
   const handleLogin = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (passwordInput === APP_PASSWORD) {
-      localStorage.setItem(AUTH_KEY, 'true');
+      // Store the ACTUAL password value, not just 'true'
+      // This ensures that if APP_PASSWORD changes in .env, the stored value won't match, forcing re-login
+      localStorage.setItem(AUTH_KEY, APP_PASSWORD);
       setIsAuthenticated(true);
       setAuthError(false);
     } else {
@@ -90,8 +96,20 @@ export default function App() {
                 進入系統 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
-            <div className="mt-6 text-center">
-               <p className="text-xs text-slate-400">Restricted Access</p>
+
+            {PASSWORD_HINT && (
+                <div className="mt-6 pt-4 border-t border-slate-100 flex justify-center">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-full border border-slate-100">
+                        <HelpCircle className="w-3 h-3 text-slate-400" />
+                        <span className="text-xs text-slate-500">
+                            提示: <span className="font-medium text-indigo-600">{PASSWORD_HINT}</span>
+                        </span>
+                    </div>
+                </div>
+            )}
+            
+            <div className="mt-4 text-center">
+               <p className="text-[10px] text-slate-300">Restricted Access</p>
             </div>
           </div>
         </div>
