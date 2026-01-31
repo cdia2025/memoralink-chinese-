@@ -27,24 +27,6 @@ const getApiKey = (provider: AiProvider) => {
   return key;
 };
 
-// Data Sanitizer (New Feature: Fixes missing definitions)
-const sanitizeVocabularyItems = (items: any[]): VocabularyItem[] => {
-  return items.map(item => ({
-    word: item.word || "未命名",
-    // Prioritize definition, fallback to meaning/explanation/translation, or default text
-    definition: (item.definition && item.definition.trim() !== "") 
-      ? item.definition 
-      : (item.meaning || item.explanation || item.chineseTranslation || "AI 未提供解釋"),
-    phonetic: item.phonetic || "",
-    chineseTranslation: item.chineseTranslation || "",
-    exampleSentence: item.exampleSentence || "暫無例句",
-    mnemonic: (item.mnemonic && item.mnemonic.trim() !== "") ? item.mnemonic : "暫無聯想記憶",
-    context: item.context || "",
-    tags: Array.isArray(item.tags) ? item.tags : [],
-    image: item.image 
-  }));
-};
-
 // Parser for Array results (Vocabulary Lists)
 const extractJsonArray = (text: string) => {
   try {
@@ -78,8 +60,7 @@ const extractJsonArray = (text: string) => {
     if (matchObj) {
         try { return JSON.parse(matchObj[0]).items; } catch (e3) {}
     }
-    // Return empty array instead of throwing to prevent app crash, handle in UI
-    return [];
+    throw new Error("AI 回傳列表格式有誤，請重試。");
   }
 };
 
@@ -90,6 +71,7 @@ const extractJsonObject = (text: string) => {
     let parsed = JSON.parse(cleanText);
     
     if (Array.isArray(parsed)) {
+        // If AI returned an array [{}], take the first item
         return parsed.length > 0 ? parsed[0] : {};
     }
     
@@ -100,10 +82,11 @@ const extractJsonObject = (text: string) => {
     if (match) {
         try { return JSON.parse(match[0]); } catch (e2) {}
     }
-    return {};
+    throw new Error("AI 回傳物件格式有誤，請重試。");
   }
 };
 
+// Updated callDeepSeek to support jsonMode toggling
 async function callDeepSeek(prompt: string, systemInstruction: string, jsonMode: boolean = true) {
   const apiKey = getApiKey('deepseek');
   const response = await fetch('https://api.deepseek.com/chat/completions', {
@@ -116,7 +99,7 @@ async function callDeepSeek(prompt: string, systemInstruction: string, jsonMode:
           { role: "user", content: prompt }
       ],
       response_format: jsonMode ? { type: "json_object" } : undefined,
-      temperature: 0.8
+      temperature: 0.8 // Reduced for better stability
     })
   });
   if (!response.ok) throw new Error(`DeepSeek API error: ${response.status}`);
@@ -135,27 +118,27 @@ export const generateVocabularyByTopic = async (
   任務：提供 ${count} 個與「${topic}」相關的${difficulty}中文詞彙或成語。
   
   重要指令：
-  1. 回傳 JSON: { "items": [ ... ] }。
-  2. "items" 陣列必須包含 ${count} 個不重複詞彙。
-  3. "mnemonic" (聯想記憶)、"exampleSentence" (例句) 和 "definition" (解釋) **絕不能留空**。
+  1. **必須回傳 JSON 物件**，結構為 { "items": [ ... ] }。
+  2. "items" 陣列必須包含 **${count} 個完全不同** 的詞彙，**絕不能重複**。
+  3. "mnemonic" (聯想記憶法)、"exampleSentence" (應用例句) 和 "definition" (解釋) **絕不能留空**。如果沒有標準記憶法，請發揮創意編寫一個有趣的故事或諧音記憶法。
   4. "phonetic" 必須提供 **廣東話拼音 (粵拼 Jyutping)**。
-  5. 即使詞彙簡單，也必須填寫 definition。
+  5. **注意：即使詞彙很簡單，也必須填寫 "definition" 欄位。**
 
-  JSON 欄位：
-  - word: 詞彙
-  - phonetic: 粵拼
-  - definition: 白話解釋 (必填，不可使用英文)
-  - chineseTranslation: 英文意思 (English Meaning)
-  - exampleSentence: 造句
-  - mnemonic: 聯想記憶故事
-  - context: 語境
-  - tags: 標籤`;
+  每個物件欄位：
+  - "word": 詞彙/成語
+  - "phonetic": 粵語拼音
+  - "definition": 白話文解釋 (必填)
+  - "chineseTranslation": 英文意思或補充
+  - "exampleSentence": 完整的應用例句 (不能留空)
+  - "mnemonic": 具體的聯想記憶故事 (不能留空，需詳細)
+  - "context": 適用語境
+  - "tags": 標籤陣列`;
 
-  const prompt = `請生成關於「${topic}」的 ${count} 個詞彙卡。請確保 "definition" (解釋) 欄位有詳細中文解釋。`;
+  const prompt = `請生成關於「${topic}」的 ${count} 個詞彙卡。請確保 "definition" (解釋) 欄位有詳細內容，不要留白。`;
 
   if (provider === 'deepseek') {
     const resText = await callDeepSeek(prompt, sys, true);
-    return sanitizeVocabularyItems(extractJsonArray(resText));
+    return extractJsonArray(resText);
   }
 
   const ai = new GoogleGenAI({ apiKey: getApiKey('gemini') });
@@ -189,20 +172,25 @@ export const generateVocabularyByTopic = async (
     }
   });
   
-  return sanitizeVocabularyItems(extractJsonArray(response.text || "[]"));
+  return extractJsonArray(response.text || "[]");
 };
 
 // 1.1 Generate from List (Chinese)
 export const generateVocabularyFromList = async (words: string[], provider: AiProvider): Promise<VocabularyItem[]> => {
   const sys = `你是中文詞彙專家。請為以下詞彙製作記憶卡。
-  回傳 JSON { "items": [...] }。
-  重點：phonetic 提供粵拼，definition (解釋) 和 mnemonic (記憶法) 必須填寫，不可留空。`;
+  回傳格式：JSON 物件 { "items": [ ... ] }。
+  
+  重要：
+  1. phonetic 必須提供 **廣東話拼音 (粵拼 Jyutping)**。
+  2. mnemonic (記憶法)、exampleSentence (例句) 和 definition (解釋) **全部必須填寫內容，絕不能留空**。
+  3. 為每個詞彙提供生動的聯想記憶故事。
+  4. **請確保 definition (解釋) 準確且詳盡。**`;
   
   const prompt = `詞彙列表：${words.join(', ')}`;
 
   if (provider === 'deepseek') {
     const resText = await callDeepSeek(prompt, sys, true);
-    return sanitizeVocabularyItems(extractJsonArray(resText));
+    return extractJsonArray(resText);
   }
   
   const ai = new GoogleGenAI({ apiKey: getApiKey('gemini') });
@@ -235,38 +223,47 @@ export const generateVocabularyFromList = async (words: string[], provider: AiPr
         }
     }
   });
-  return sanitizeVocabularyItems(extractJsonArray(response.text || "[]"));
+  return extractJsonArray(response.text || "[]");
 };
 
-// 2. Analyze Classical Chinese
+// 2. Analyze Classical Chinese (New Feature)
 export const analyzeClassicalChinese = async (
   text: string,
   provider: AiProvider
 ): Promise<any> => {
-  const sys = `你是國學大師。用戶輸入文言文或詩詞。
+  const sys = `你是國學大師。用戶會輸入一段文言文或詩詞。
   任務：
   1. 提供「白話文翻譯」。
-  2. 考證「出處」及「背景」。
-  3. 提供「現代應用」。
-  4. 提取 3-5 個重點「詞彙」，製作記憶卡 (包含粵拼)。
+  2. **嚴格考證「出處」及「背景」**：
+     - **必須**查核並列出句子出處（書名、篇名、作者）。
+     - **必須**詳細闡述歷史背景、創作動機。
+     - **警告：此欄位絕不能留空。**
+  3. 提供「現代應用方式」(如何在寫作、職場或演講中使用)。
+  4. 提取 3-5 個重點「詞彙/字詞」，並製作記憶卡(vocabulary items)。
+     - vocabulary 中的 "phonetic" 欄位必須標註 **廣東話拼音 (粵拼 Jyutping)**。
+     - **重要**：vocabulary 陣列必須包含資料，絕不能回傳空陣列。
   
-  回傳 JSON Object:
+  輸出格式 JSON 範例 (Object)：
   {
-    "translation": "翻譯...",
-    "origin": "出處...",
-    "usage": "應用...",
-    "vocabulary": [ ... ]
+    "translation": "白話文翻譯...",
+    "origin": "《論語·學而》...",
+    "usage": "這句話可以用於...",
+    "vocabulary": [
+      {
+        "word": "詞彙",
+        "phonetic": "ci4 wui6",
+        "definition": "解釋...",
+        "mnemonic": "記憶法...",
+        "exampleSentence": "例句..."
+      }
+    ]
   }`;
 
-  const prompt = `分析：\n${text}`;
+  const prompt = `分析這段文言文：\n${text}\n請確保 vocabulary 欄位至少包含 3 個重點詞彙。`;
 
   if (provider === 'deepseek') {
     const resText = await callDeepSeek(prompt, sys, true);
-    const result = extractJsonObject(resText);
-    if (result.vocabulary && Array.isArray(result.vocabulary)) {
-        result.vocabulary = sanitizeVocabularyItems(result.vocabulary);
-    }
-    return result;
+    return extractJsonObject(resText);
   }
 
   const ai = new GoogleGenAI({ apiKey: getApiKey('gemini') });
@@ -302,31 +299,27 @@ export const analyzeClassicalChinese = async (
       }
     }
   });
-  const result = extractJsonObject(response.text || "{}");
-  if (result.vocabulary && Array.isArray(result.vocabulary)) {
-      result.vocabulary = sanitizeVocabularyItems(result.vocabulary);
-  }
-  return result;
+  return extractJsonObject(response.text || "{}");
 };
 
 // 3. Analyze Writing (Chinese)
 export const analyzeWriting = async (text: string, context: string, provider: AiProvider): Promise<any> => {
   const sys = `你是中文寫作教練。
   1. 修正語法與錯別字 (Correction)。
-  2. 潤飾文章 (Improved Version)。
+  2. 潤飾文章 (Improved Version)，使其更通順、優美、專業。
   3. 提供解釋 (Explanation)。
-  4. 建議 2-3 個高級詞彙 (Key Vocabulary)，附帶粵拼與記憶法。
-  回傳 JSON Object。`;
+  4. 建議 2-3 個可替換的高級詞彙 (Key Vocabulary)。
+     - keyVocabulary 中的 "phonetic" 欄位必須標註 **廣東話拼音 (粵拼 Jyutping)**。
+     - **重要**：keyVocabulary 陣列中的每個物件都必須包含 definition (定義) 和 mnemonic (記憶法)。**絕不能回傳空物件或空字串**。
+  回傳 JSON (Object)。`;
   
-  const prompt = `語境：${context}。文章：${text}`;
+  const prompt = `語境：${context}。文章：${text}。
+  
+  重要：請確保 keyVocabulary 包含完整的資料，包括 word, definition, mnemonic, phonetic。不要留空。`;
 
   if (provider === 'deepseek') {
     const resText = await callDeepSeek(prompt, sys, true);
-    const result = extractJsonObject(resText);
-    if (result.keyVocabulary && Array.isArray(result.keyVocabulary)) {
-        result.keyVocabulary = sanitizeVocabularyItems(result.keyVocabulary);
-    }
-    return result;
+    return extractJsonObject(resText);
   }
 
   const ai = new GoogleGenAI({ apiKey: getApiKey('gemini') });
@@ -347,11 +340,7 @@ export const analyzeWriting = async (text: string, context: string, provider: Ai
       }
     }
   });
-  const result = extractJsonObject(response.text || "{}");
-  if (result.keyVocabulary && Array.isArray(result.keyVocabulary)) {
-      result.keyVocabulary = sanitizeVocabularyItems(result.keyVocabulary);
-  }
-  return result;
+  return extractJsonObject(response.text || "{}");
 };
 
 // 4. Chat (Chinese Roleplay)
@@ -359,23 +348,31 @@ export const createChatSession = (provider: AiProvider, systemInstruction: strin
   const instruction = systemInstruction + " 請使用繁體中文進行對話。";
   
   if (provider === 'deepseek') {
+    // For Chat, we must maintain history manually and disable JSON mode
     let history: {role: string, content: string}[] = [];
     return {
       sendMessage: async (msg: string) => {
         history.push({ role: "user", content: msg });
+        
         const apiKey = getApiKey('deepseek');
         const response = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
             body: JSON.stringify({
             model: DEEPSEEK_MODEL,
-            messages: [{ role: "system", content: instruction }, ...history],
+            messages: [
+                { role: "system", content: instruction }, 
+                ...history
+            ],
+            // Important: No response_format: "json_object" for chat/quiz scenario generation
             temperature: 0.9 
             })
         });
+
         if (!response.ok) throw new Error(`DeepSeek API error: ${response.status}`);
         const data = await response.json();
         const resText = data.choices[0].message.content;
+        
         history.push({ role: "assistant", content: resText });
         return resText as string;
       }
