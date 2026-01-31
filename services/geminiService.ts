@@ -27,6 +27,24 @@ const getApiKey = (provider: AiProvider) => {
   return key;
 };
 
+// Data Sanitizer to ensure UI doesn't break on missing fields
+const sanitizeVocabularyItems = (items: any[]): VocabularyItem[] => {
+  return items.map(item => ({
+    word: item.word || "未命名",
+    // Fallback chain: definition -> meaning -> chineseTranslation -> Placeholder
+    definition: (item.definition && item.definition.trim() !== "") 
+      ? item.definition 
+      : (item.meaning || item.chineseTranslation || "AI 未提供解釋，請嘗試重新生成。"),
+    phonetic: item.phonetic || "",
+    chineseTranslation: item.chineseTranslation || "",
+    exampleSentence: item.exampleSentence || "暫無例句",
+    mnemonic: (item.mnemonic && item.mnemonic.trim() !== "") ? item.mnemonic : "暫無聯想記憶",
+    context: item.context || "",
+    tags: Array.isArray(item.tags) ? item.tags : [],
+    image: item.image // Preserve image if exists
+  }));
+};
+
 // Parser for Array results (Vocabulary Lists)
 const extractJsonArray = (text: string) => {
   try {
@@ -120,24 +138,26 @@ export const generateVocabularyByTopic = async (
   重要指令：
   1. **必須回傳 JSON 物件**，結構為 { "items": [ ... ] }。
   2. "items" 陣列必須包含 **${count} 個完全不同** 的詞彙，**絕不能重複**。
-  3. "mnemonic" (聯想記憶法) 和 "exampleSentence" (應用例句) **絕不能留空**。如果沒有標準記憶法，請發揮創意編寫一個有趣的故事或諧音記憶法。
+  3. "mnemonic" (聯想記憶法)、"exampleSentence" (應用例句) 和 "definition" (解釋) **絕不能留空**。
   4. "phonetic" 必須提供 **廣東話拼音 (粵拼 Jyutping)**。
+  5. **注意：即使詞彙很簡單，也必須填寫 "definition" 欄位。**
 
   每個物件欄位：
   - "word": 詞彙/成語
   - "phonetic": 粵語拼音
-  - "definition": 白話文解釋
+  - "definition": 白話文解釋 (必填，不可留空)
   - "chineseTranslation": 英文意思或補充
   - "exampleSentence": 完整的應用例句 (不能留空)
   - "mnemonic": 具體的聯想記憶故事 (不能留空，需詳細)
   - "context": 適用語境
   - "tags": 標籤陣列`;
 
-  const prompt = `請生成關於「${topic}」的 ${count} 個詞彙卡。請確保內容豐富，不要留白。`;
+  const prompt = `請生成關於「${topic}」的 ${count} 個詞彙卡。請特別注意：每一項的 definition (定義) 都必須填寫，不能是空字串。`;
 
   if (provider === 'deepseek') {
     const resText = await callDeepSeek(prompt, sys, true);
-    return extractJsonArray(resText);
+    const rawItems = extractJsonArray(resText);
+    return sanitizeVocabularyItems(rawItems);
   }
 
   const ai = new GoogleGenAI({ apiKey: getApiKey('gemini') });
@@ -171,7 +191,8 @@ export const generateVocabularyByTopic = async (
     }
   });
   
-  return extractJsonArray(response.text || "[]");
+  const rawItems = extractJsonArray(response.text || "[]");
+  return sanitizeVocabularyItems(rawItems);
 };
 
 // 1.1 Generate from List (Chinese)
@@ -181,14 +202,16 @@ export const generateVocabularyFromList = async (words: string[], provider: AiPr
   
   重要：
   1. phonetic 必須提供 **廣東話拼音 (粵拼 Jyutping)**。
-  2. mnemonic (記憶法) 和 exampleSentence (例句) **必須填寫內容，不能留空**。
-  3. 為每個詞彙提供生動的聯想記憶故事。`;
+  2. mnemonic (記憶法)、exampleSentence (例句) 和 definition (解釋) **全部必須填寫內容，絕不能留空**。
+  3. 為每個詞彙提供生動的聯想記憶故事。
+  4. **請確保 definition (解釋) 準確且詳盡。**`;
   
-  const prompt = `詞彙列表：${words.join(', ')}`;
+  const prompt = `詞彙列表：${words.join(', ')}。請確保 definition 欄位有值。`;
 
   if (provider === 'deepseek') {
     const resText = await callDeepSeek(prompt, sys, true);
-    return extractJsonArray(resText);
+    const rawItems = extractJsonArray(resText);
+    return sanitizeVocabularyItems(rawItems);
   }
   
   const ai = new GoogleGenAI({ apiKey: getApiKey('gemini') });
@@ -221,7 +244,8 @@ export const generateVocabularyFromList = async (words: string[], provider: AiPr
         }
     }
   });
-  return extractJsonArray(response.text || "[]");
+  const rawItems = extractJsonArray(response.text || "[]");
+  return sanitizeVocabularyItems(rawItems);
 };
 
 // 2. Analyze Classical Chinese (New Feature)
@@ -261,7 +285,12 @@ export const analyzeClassicalChinese = async (
 
   if (provider === 'deepseek') {
     const resText = await callDeepSeek(prompt, sys, true);
-    return extractJsonObject(resText);
+    const result = extractJsonObject(resText);
+    // Sanitize vocabulary in result
+    if (result.vocabulary && Array.isArray(result.vocabulary)) {
+        result.vocabulary = sanitizeVocabularyItems(result.vocabulary);
+    }
+    return result;
   }
 
   const ai = new GoogleGenAI({ apiKey: getApiKey('gemini') });
@@ -297,7 +326,11 @@ export const analyzeClassicalChinese = async (
       }
     }
   });
-  return extractJsonObject(response.text || "{}");
+  const result = extractJsonObject(response.text || "{}");
+  if (result.vocabulary && Array.isArray(result.vocabulary)) {
+      result.vocabulary = sanitizeVocabularyItems(result.vocabulary);
+  }
+  return result;
 };
 
 // 3. Analyze Writing (Chinese)
@@ -317,7 +350,11 @@ export const analyzeWriting = async (text: string, context: string, provider: Ai
 
   if (provider === 'deepseek') {
     const resText = await callDeepSeek(prompt, sys, true);
-    return extractJsonObject(resText);
+    const result = extractJsonObject(resText);
+    if (result.keyVocabulary && Array.isArray(result.keyVocabulary)) {
+        result.keyVocabulary = sanitizeVocabularyItems(result.keyVocabulary);
+    }
+    return result;
   }
 
   const ai = new GoogleGenAI({ apiKey: getApiKey('gemini') });
@@ -338,7 +375,11 @@ export const analyzeWriting = async (text: string, context: string, provider: Ai
       }
     }
   });
-  return extractJsonObject(response.text || "{}");
+  const result = extractJsonObject(response.text || "{}");
+  if (result.keyVocabulary && Array.isArray(result.keyVocabulary)) {
+      result.keyVocabulary = sanitizeVocabularyItems(result.keyVocabulary);
+  }
+  return result;
 };
 
 // 4. Chat (Chinese Roleplay)
