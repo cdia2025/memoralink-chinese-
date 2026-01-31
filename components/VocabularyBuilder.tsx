@@ -197,8 +197,9 @@ export const VocabularyBuilder: React.FC<VocabularyBuilderProps> = ({ aiProvider
                 {isRevealed ? (
                   <div className="space-y-4 animate-in fade-in">
                     <div>
-                      <p className="text-slate-800 font-medium">{item.definition}</p>
-                      {item.chineseTranslation && <p className="text-slate-400 text-xs mt-1">{item.chineseTranslation}</p>}
+                      {/* Enforced visibility with higher font-weight and clear styling for mobile */}
+                      <p className="text-slate-900 font-bold leading-relaxed">{item.definition || <span className="text-slate-400 italic font-normal">暫無解釋 (AI 未提供)</span>}</p>
+                      {item.chineseTranslation && <p className="text-slate-500 text-xs mt-1">{item.chineseTranslation}</p>}
                     </div>
                     <div>
                       <span className="text-xs font-semibold text-slate-400 uppercase">例句</span>
