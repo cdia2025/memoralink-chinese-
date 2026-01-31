@@ -142,6 +142,8 @@ export const storageService = {
        throw new Error("備份檔案過大 (>5MB)，超出瀏覽器儲存限制。無法還原。建議手動編輯 JSON 檔分批匯入。");
     }
 
+    // Transaction-like attempt: try to save all, if fail, define behavior
+    // Here we save individually to salvage what we can
     try {
       if (jsonData.vocabulary && Array.isArray(jsonData.vocabulary)) {
         storageService.saveVocabulary(jsonData.vocabulary);
@@ -154,7 +156,7 @@ export const storageService = {
       }
     } catch (e: any) {
       if (e.message.includes("空間已滿")) {
-         throw e;
+         throw e; // Re-throw our custom error
       }
       throw new Error("還原過程中發生未預期的錯誤");
     }

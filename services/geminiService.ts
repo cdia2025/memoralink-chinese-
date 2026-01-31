@@ -27,13 +27,14 @@ const getApiKey = (provider: AiProvider) => {
   return key;
 };
 
-// Data Sanitizer (修復 DeepSeek 偶爾漏填資料的問題)
+// Data Sanitizer (New Feature: Fixes missing definitions)
 const sanitizeVocabularyItems = (items: any[]): VocabularyItem[] => {
   return items.map(item => ({
     word: item.word || "未命名",
+    // Prioritize definition, fallback to meaning/explanation/translation, or default text
     definition: (item.definition && item.definition.trim() !== "") 
       ? item.definition 
-      : (item.meaning || item.explanation || "AI 未提供解釋"),
+      : (item.meaning || item.explanation || item.chineseTranslation || "AI 未提供解釋"),
     phonetic: item.phonetic || "",
     chineseTranslation: item.chineseTranslation || "",
     exampleSentence: item.exampleSentence || "暫無例句",
@@ -44,35 +45,61 @@ const sanitizeVocabularyItems = (items: any[]): VocabularyItem[] => {
   }));
 };
 
+// Parser for Array results (Vocabulary Lists)
 const extractJsonArray = (text: string) => {
   try {
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     let parsed = JSON.parse(cleanText);
-    
-    // Handle wrapped objects like { items: [...] }
+
+    // Handle case where AI returns an object wrapper { "items": [...] }
     if (!Array.isArray(parsed) && typeof parsed === 'object' && parsed !== null) {
         const keys = Object.keys(parsed);
         for (const key of keys) {
-            if (Array.isArray(parsed[key])) return parsed[key];
+            if (Array.isArray(parsed[key])) {
+                return parsed[key];
+            }
         }
     }
     
-    if (!Array.isArray(parsed) && typeof parsed === 'object' && parsed !== null) return [parsed];
+    // If parsed is a single object but supposed to be a list, wrap it
+    if (!Array.isArray(parsed) && typeof parsed === 'object' && parsed !== null) {
+       return [parsed];
+    }
+
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
-    console.error("JSON Parse Error:", e);
+    console.error("JSON Array Parse Error:", e, text);
+    const match = text.match(/\[\s*\{.*\}\s*\]/s);
+    if (match) {
+        try { return JSON.parse(match[0]); } catch (e2) {}
+    }
+    // Try to find object items wrapper
+    const matchObj = text.match(/\{\s*"items"\s*:\s*\[.*\]\s*\}/s);
+    if (matchObj) {
+        try { return JSON.parse(matchObj[0]).items; } catch (e3) {}
+    }
+    // Return empty array instead of throwing to prevent app crash, handle in UI
     return [];
   }
 };
 
+// Parser for Object results (Analysis, Writing)
 const extractJsonObject = (text: string) => {
   try {
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     let parsed = JSON.parse(cleanText);
-    if (Array.isArray(parsed)) return parsed.length > 0 ? parsed[0] : {};
+    
+    if (Array.isArray(parsed)) {
+        return parsed.length > 0 ? parsed[0] : {};
+    }
+    
     return typeof parsed === 'object' ? parsed : {};
   } catch (e) {
-    console.error("JSON Object Parse Error:", e);
+    console.error("JSON Object Parse Error:", e, text);
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+        try { return JSON.parse(match[0]); } catch (e2) {}
+    }
     return {};
   }
 };
@@ -97,14 +124,14 @@ async function callDeepSeek(prompt: string, systemInstruction: string, jsonMode:
   return data.choices[0].message.content;
 }
 
-// 1. Generate Vocabulary (Chinese)
+// 1. Generate Vocabulary (Chinese Context)
 export const generateVocabularyByTopic = async (
   topic: string, 
   count: number, 
   difficulty: string,
   provider: AiProvider
 ): Promise<VocabularyItem[]> => {
-  const sys = `你是資深中文老師。目標：幫助記憶力差的學生或職場人士學習詞彙。
+  const sys = `你是資深中文老師。目標：幫助記憶力差的初中/高中生及在職人士學習詞彙。
   任務：提供 ${count} 個與「${topic}」相關的${difficulty}中文詞彙或成語。
   
   重要指令：
@@ -117,14 +144,14 @@ export const generateVocabularyByTopic = async (
   JSON 欄位：
   - word: 詞彙
   - phonetic: 粵拼
-  - definition: 白話解釋 (必填)
+  - definition: 白話解釋 (必填，不可使用英文)
   - chineseTranslation: 英文意思 (English Meaning)
   - exampleSentence: 造句
-  - mnemonic: 聯想記憶故事 (幫助記憶這個詞的故事)
+  - mnemonic: 聯想記憶故事
   - context: 語境
   - tags: 標籤`;
 
-  const prompt = `請生成關於「${topic}」的 ${count} 個詞彙卡。`;
+  const prompt = `請生成關於「${topic}」的 ${count} 個詞彙卡。請確保 "definition" (解釋) 欄位有詳細中文解釋。`;
 
   if (provider === 'deepseek') {
     const resText = await callDeepSeek(prompt, sys, true);
@@ -286,7 +313,7 @@ export const analyzeClassicalChinese = async (
 export const analyzeWriting = async (text: string, context: string, provider: AiProvider): Promise<any> => {
   const sys = `你是中文寫作教練。
   1. 修正語法與錯別字 (Correction)。
-  2. 潤飾文章，使其更通順、專業 (Improved Version)。
+  2. 潤飾文章 (Improved Version)。
   3. 提供解釋 (Explanation)。
   4. 建議 2-3 個高級詞彙 (Key Vocabulary)，附帶粵拼與記憶法。
   回傳 JSON Object。`;
@@ -315,21 +342,7 @@ export const analyzeWriting = async (text: string, context: string, provider: Ai
             correction: { type: Type.STRING },
             explanation: { type: Type.STRING },
             improvedVersion: { type: Type.STRING },
-            keyVocabulary: { 
-              type: Type.ARRAY, 
-              items: { 
-                type: Type.OBJECT, 
-                properties: { 
-                    word: {type:Type.STRING}, 
-                    definition: {type:Type.STRING}, 
-                    mnemonic: {type:Type.STRING}, 
-                    phonetic: {type:Type.STRING}, 
-                    chineseTranslation: {type:Type.STRING}, 
-                    exampleSentence: {type:Type.STRING}, 
-                    tags: {type:Type.ARRAY, items: {type:Type.STRING}} 
-                } 
-              } 
-            }
+            keyVocabulary: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { word: {type:Type.STRING}, definition: {type:Type.STRING}, mnemonic: {type:Type.STRING}, phonetic: {type:Type.STRING}, chineseTranslation: {type:Type.STRING}, exampleSentence: {type:Type.STRING}, tags: {type:Type.ARRAY, items: {type:Type.STRING}} } } }
          }
       }
     }
@@ -343,7 +356,7 @@ export const analyzeWriting = async (text: string, context: string, provider: Ai
 
 // 4. Chat (Chinese Roleplay)
 export const createChatSession = (provider: AiProvider, systemInstruction: string): ChatSession => {
-  const instruction = systemInstruction + " 請使用繁體中文進行對話 (廣東話或書面語皆可)。";
+  const instruction = systemInstruction + " 請使用繁體中文進行對話。";
   
   if (provider === 'deepseek') {
     let history: {role: string, content: string}[] = [];
