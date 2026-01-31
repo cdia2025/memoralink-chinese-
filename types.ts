@@ -6,21 +6,21 @@ export enum AppView {
   SPEAKING = 'SPEAKING',
   LIBRARY = 'LIBRARY',
   QUIZ = 'QUIZ',
-  CLASSICAL = 'CLASSICAL' // New View
+  CLASSICAL = 'CLASSICAL'
 }
 
 export type AiProvider = 'gemini' | 'deepseek';
 
 export interface VocabularyItem {
   word: string; // 詞彙/成語
-  phonetic?: string; // 注音 或 拼音
-  definition: string; // 釋義
-  chineseTranslation: string; // Used as "English Meaning" or "Modern Explanation" in this context
+  phonetic?: string; // 粵拼 (Jyutping)
+  definition: string; // 解釋
+  chineseTranslation?: string; // 英文意思 (English Meaning) - Optional
   exampleSentence: string; // 例句
-  mnemonic: string; // 記憶法 (拆字/聯想)
+  mnemonic: string; // 聯想記憶故事
   context: string; // 語境
   tags?: string[]; 
-  image?: string; // New: Base64 image string for visual memory
+  image?: string;
 }
 
 export interface WritingEntry {
@@ -38,7 +38,7 @@ export interface ClassicalEntry {
   originalText: string;
   translation: string; // 白話文
   origin: string; // 出處
-  usage: string; // 應用方式
+  usage: string; // 應用
   date: string;
 }
 
