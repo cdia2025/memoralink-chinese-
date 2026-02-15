@@ -27,17 +27,20 @@ const getApiKey = (provider: AiProvider) => {
   return key;
 };
 
-// Data Sanitizer (New Feature: Fixes missing definitions)
+// Data Sanitizer (Enhanced: Fixes missing definitions AND missing words)
 const sanitizeVocabularyItems = (items: any[]): VocabularyItem[] => {
   return items.map(item => ({
-    word: item.word || "未命名",
-    // Prioritize definition, fallback to meaning/explanation/translation, or default text
+    // Fix 'Unnamed': Check common alternative keys AI might return
+    word: item.word || item.term || item.character || item.zi || item.text || "未命名",
+    
+    // Fix 'Missing Definition': Fallback to other keys or use placeholder
     definition: (item.definition && item.definition.trim() !== "") 
       ? item.definition 
       : (item.meaning || item.explanation || item.chineseTranslation || "AI 未提供解釋"),
-    phonetic: item.phonetic || "",
+    
+    phonetic: item.phonetic || item.jyutping || item.pinyin || "",
     chineseTranslation: item.chineseTranslation || "",
-    exampleSentence: item.exampleSentence || "暫無例句",
+    exampleSentence: item.exampleSentence || item.sentence || "暫無例句",
     mnemonic: (item.mnemonic && item.mnemonic.trim() !== "") ? item.mnemonic : "暫無聯想記憶",
     context: item.context || "",
     tags: Array.isArray(item.tags) ? item.tags : [],
@@ -49,7 +52,16 @@ const sanitizeVocabularyItems = (items: any[]): VocabularyItem[] => {
 const extractJsonArray = (text: string) => {
   try {
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    let parsed = JSON.parse(cleanText);
+    // Try to find the array start and end if there is chatter
+    const arrayStart = cleanText.indexOf('[');
+    const arrayEnd = cleanText.lastIndexOf(']');
+    
+    let jsonString = cleanText;
+    if (arrayStart !== -1 && arrayEnd !== -1) {
+        jsonString = cleanText.substring(arrayStart, arrayEnd + 1);
+    }
+
+    let parsed = JSON.parse(jsonString);
 
     // Handle case where AI returns an object wrapper { "items": [...] }
     if (!Array.isArray(parsed) && typeof parsed === 'object' && parsed !== null) {
@@ -68,17 +80,12 @@ const extractJsonArray = (text: string) => {
 
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
-    console.error("JSON Array Parse Error:", e, text);
-    const match = text.match(/\[\s*\{.*\}\s*\]/s);
-    if (match) {
-        try { return JSON.parse(match[0]); } catch (e2) {}
-    }
-    // Try to find object items wrapper
+    console.error("JSON Array Parse Error:", e);
+    // Fallback: regex extraction
     const matchObj = text.match(/\{\s*"items"\s*:\s*\[.*\]\s*\}/s);
     if (matchObj) {
         try { return JSON.parse(matchObj[0]).items; } catch (e3) {}
     }
-    // Return empty array instead of throwing to prevent app crash, handle in UI
     return [];
   }
 };
@@ -87,7 +94,16 @@ const extractJsonArray = (text: string) => {
 const extractJsonObject = (text: string) => {
   try {
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    let parsed = JSON.parse(cleanText);
+    // Locate the first '{' and last '}'
+    const objStart = cleanText.indexOf('{');
+    const objEnd = cleanText.lastIndexOf('}');
+    
+    let jsonString = cleanText;
+    if (objStart !== -1 && objEnd !== -1) {
+        jsonString = cleanText.substring(objStart, objEnd + 1);
+    }
+
+    let parsed = JSON.parse(jsonString);
     
     if (Array.isArray(parsed)) {
         return parsed.length > 0 ? parsed[0] : {};
@@ -95,11 +111,7 @@ const extractJsonObject = (text: string) => {
     
     return typeof parsed === 'object' ? parsed : {};
   } catch (e) {
-    console.error("JSON Object Parse Error:", e, text);
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) {
-        try { return JSON.parse(match[0]); } catch (e2) {}
-    }
+    console.error("JSON Object Parse Error:", e);
     return {};
   }
 };
@@ -116,7 +128,7 @@ async function callDeepSeek(prompt: string, systemInstruction: string, jsonMode:
           { role: "user", content: prompt }
       ],
       response_format: jsonMode ? { type: "json_object" } : undefined,
-      temperature: 0.8
+      temperature: 0.7 // Lower temperature for more stable JSON
     })
   });
   if (!response.ok) throw new Error(`DeepSeek API error: ${response.status}`);
@@ -134,24 +146,24 @@ export const generateVocabularyByTopic = async (
   const sys = `你是資深中文老師。目標：幫助記憶力差的初中/高中生及在職人士學習詞彙。
   任務：提供 ${count} 個與「${topic}」相關的${difficulty}中文詞彙或成語。
   
-  重要指令：
-  1. 回傳 JSON: { "items": [ ... ] }。
-  2. "items" 陣列必須包含 ${count} 個不重複詞彙。
-  3. "mnemonic" (聯想記憶)、"exampleSentence" (例句) 和 "definition" (解釋) **絕不能留空**。
-  4. "phonetic" 必須提供 **廣東話拼音 (粵拼 Jyutping)**。
-  5. 即使詞彙簡單，也必須填寫 definition。
+  嚴格回傳 JSON 格式：
+  {
+    "items": [
+      {
+        "word": "詞彙",
+        "phonetic": "粵拼 (例如: jyut6)",
+        "definition": "詳細白話解釋",
+        "mnemonic": "聯想記憶故事",
+        "exampleSentence": "完整例句",
+        "context": "適用語境",
+        "tags": ["標籤"]
+      }
+    ]
+  }
+  
+  注意：definition 和 mnemonic 絕不能留空。phonetic 必須是粵拼 (Jyutping)。`;
 
-  JSON 欄位：
-  - word: 詞彙
-  - phonetic: 粵拼
-  - definition: 白話解釋 (必填，不可使用英文)
-  - chineseTranslation: 英文意思 (English Meaning)
-  - exampleSentence: 造句
-  - mnemonic: 聯想記憶故事
-  - context: 語境
-  - tags: 標籤`;
-
-  const prompt = `請生成關於「${topic}」的 ${count} 個詞彙卡。請確保 "definition" (解釋) 欄位有詳細中文解釋。`;
+  const prompt = `請生成關於「${topic}」的 ${count} 個詞彙卡。`;
 
   if (provider === 'deepseek') {
     const resText = await callDeepSeek(prompt, sys, true);
@@ -238,32 +250,47 @@ export const generateVocabularyFromList = async (words: string[], provider: AiPr
   return sanitizeVocabularyItems(extractJsonArray(response.text || "[]"));
 };
 
-// 2. Analyze Classical Chinese
+// 2. Analyze Classical Chinese (Improved for DeepSeek stability)
 export const analyzeClassicalChinese = async (
   text: string,
   provider: AiProvider
 ): Promise<any> => {
+  // Enhanced System Prompt specifically to force JSON structure for Vocabulary
   const sys = `你是國學大師。用戶輸入文言文或詩詞。
   任務：
   1. 提供「白話文翻譯」。
   2. 考證「出處」及「背景」。
   3. 提供「現代應用」。
-  4. 提取 3-5 個重點「詞彙」，製作記憶卡 (包含粵拼)。
+  4. 提取 3-5 個重點「實詞」(生僻字、通假字或古今異義詞)，製作詳細記憶卡。
   
-  回傳 JSON Object:
+  請嚴格按照以下 JSON 結構回覆 (鍵名必須完全一致)：
   {
-    "translation": "翻譯...",
-    "origin": "出處...",
-    "usage": "應用...",
-    "vocabulary": [ ... ]
-  }`;
+    "translation": "完整白話文翻譯",
+    "origin": "出處與作者",
+    "usage": "現代應用或啟示",
+    "vocabulary": [
+      {
+        "word": "這裡填寫單字或詞語 (例如: 說)",
+        "phonetic": "粵拼 (例如: jyut6)",
+        "definition": "這裡填寫詳細字義 (例如: 通「悅」，高興)",
+        "mnemonic": "助記法 (例如: 用言語說出來很開心)",
+        "exampleSentence": "包含此字詞的短句"
+      }
+    ]
+  }
+  `;
 
-  const prompt = `分析：\n${text}`;
+  const prompt = `請分析以下古文：\n${text}`;
 
   if (provider === 'deepseek') {
+    // DeepSeek handles prompt-based JSON schemas better than implicit ones
     const resText = await callDeepSeek(prompt, sys, true);
     const result = extractJsonObject(resText);
-    if (result.vocabulary && Array.isArray(result.vocabulary)) {
+    
+    // Fallback: If vocabulary is missing or empty, ensure it's an array to prevent crashes
+    if (!result.vocabulary) result.vocabulary = [];
+    
+    if (Array.isArray(result.vocabulary)) {
         result.vocabulary = sanitizeVocabularyItems(result.vocabulary);
     }
     return result;
@@ -316,7 +343,16 @@ export const analyzeWriting = async (text: string, context: string, provider: Ai
   2. 潤飾文章 (Improved Version)。
   3. 提供解釋 (Explanation)。
   4. 建議 2-3 個高級詞彙 (Key Vocabulary)，附帶粵拼與記憶法。
-  回傳 JSON Object。`;
+  
+  回傳 JSON 結構：
+  {
+    "correction": "...",
+    "explanation": "...",
+    "improvedVersion": "...",
+    "keyVocabulary": [
+       { "word": "...", "phonetic": "...", "definition": "...", "mnemonic": "..." }
+    ]
+  }`;
   
   const prompt = `語境：${context}。文章：${text}`;
 
