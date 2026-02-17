@@ -128,7 +128,7 @@ async function callDeepSeek(prompt: string, systemInstruction: string, jsonMode:
           { role: "user", content: prompt }
       ],
       response_format: jsonMode ? { type: "json_object" } : undefined,
-      temperature: 0.7 // Lower temperature for more stable JSON
+      temperature: 0.7 
     })
   });
   if (!response.ok) throw new Error(`DeepSeek API error: ${response.status}`);
@@ -146,24 +146,28 @@ export const generateVocabularyByTopic = async (
   const sys = `你是資深中文老師。目標：幫助記憶力差的初中/高中生及在職人士學習詞彙。
   任務：提供 ${count} 個與「${topic}」相關的${difficulty}中文詞彙或成語。
   
+  嚴格規則：
+  1. **所有解釋(definition)及例句(exampleSentence)必須使用「標準書面語」(Standard Written Chinese)**，嚴禁使用廣東話口語 (如：嘅、喺、咁、佢)。
+  2. "phonetic" 必須是 **粵拼 (Jyutping)**。
+  
   嚴格回傳 JSON 格式：
   {
     "items": [
       {
         "word": "詞彙",
         "phonetic": "粵拼 (例如: jyut6)",
-        "definition": "詳細白話解釋",
+        "definition": "詳細書面語解釋",
         "mnemonic": "聯想記憶故事",
-        "exampleSentence": "完整例句",
+        "exampleSentence": "完整書面語例句",
         "context": "適用語境",
         "tags": ["標籤"]
       }
     ]
   }
   
-  注意：definition 和 mnemonic 絕不能留空。phonetic 必須是粵拼 (Jyutping)。`;
+  注意：definition 和 mnemonic 絕不能留空。`;
 
-  const prompt = `請生成關於「${topic}」的 ${count} 個詞彙卡。`;
+  const prompt = `請生成關於「${topic}」的 ${count} 個詞彙卡。請確保例句是書面語。`;
 
   if (provider === 'deepseek') {
     const resText = await callDeepSeek(prompt, sys, true);
@@ -208,7 +212,10 @@ export const generateVocabularyByTopic = async (
 export const generateVocabularyFromList = async (words: string[], provider: AiProvider): Promise<VocabularyItem[]> => {
   const sys = `你是中文詞彙專家。請為以下詞彙製作記憶卡。
   回傳 JSON { "items": [...] }。
-  重點：phonetic 提供粵拼，definition (解釋) 和 mnemonic (記憶法) 必須填寫，不可留空。`;
+  嚴格規則：
+  1. phonetic 提供粵拼 (Jyutping)。
+  2. definition (解釋) 和 exampleSentence (例句) 必須使用**標準書面語**，不可使用廣東話口語。
+  3. mnemonic (記憶法) 必須填寫，不可留空。`;
   
   const prompt = `詞彙列表：${words.join(', ')}`;
 
@@ -258,23 +265,23 @@ export const analyzeClassicalChinese = async (
   // Enhanced System Prompt specifically to force JSON structure for Vocabulary
   const sys = `你是國學大師。用戶輸入文言文或詩詞。
   任務：
-  1. 提供「白話文翻譯」。
+  1. 提供「白話文翻譯」(必須使用標準書面語)。
   2. 考證「出處」及「背景」。
-  3. 提供「現代應用」。
+  3. 提供「現代應用」(標準書面語)。
   4. 提取 3-5 個重點「實詞」(生僻字、通假字或古今異義詞)，製作詳細記憶卡。
   
   請嚴格按照以下 JSON 結構回覆 (鍵名必須完全一致)：
   {
-    "translation": "完整白話文翻譯",
+    "translation": "完整白話文翻譯 (書面語)",
     "origin": "出處與作者",
-    "usage": "現代應用或啟示",
+    "usage": "現代應用或啟示 (書面語)",
     "vocabulary": [
       {
         "word": "這裡填寫單字或詞語 (例如: 說)",
         "phonetic": "粵拼 (例如: jyut6)",
-        "definition": "這裡填寫詳細字義 (例如: 通「悅」，高興)",
-        "mnemonic": "助記法 (例如: 用言語說出來很開心)",
-        "exampleSentence": "包含此字詞的短句"
+        "definition": "這裡填寫詳細字義 (書面語)",
+        "mnemonic": "助記法",
+        "exampleSentence": "包含此字詞的書面語短句"
       }
     ]
   }
@@ -339,9 +346,9 @@ export const analyzeClassicalChinese = async (
 // 3. Analyze Writing (Chinese)
 export const analyzeWriting = async (text: string, context: string, provider: AiProvider): Promise<any> => {
   const sys = `你是中文寫作教練。
-  1. 修正語法與錯別字 (Correction)。
-  2. 潤飾文章 (Improved Version)。
-  3. 提供解釋 (Explanation)。
+  1. 修正語法與錯別字 (Correction) - 使用標準書面語。
+  2. 潤飾文章 (Improved Version) - 使用優美、專業的標準書面語。
+  3. 提供解釋 (Explanation) - 分析修正原因。
   4. 建議 2-3 個高級詞彙 (Key Vocabulary)，附帶粵拼與記憶法。
   
   回傳 JSON 結構：
@@ -350,7 +357,7 @@ export const analyzeWriting = async (text: string, context: string, provider: Ai
     "explanation": "...",
     "improvedVersion": "...",
     "keyVocabulary": [
-       { "word": "...", "phonetic": "...", "definition": "...", "mnemonic": "..." }
+       { "word": "...", "phonetic": "...", "definition": "書面語解釋", "mnemonic": "..." }
     ]
   }`;
   
@@ -392,7 +399,7 @@ export const analyzeWriting = async (text: string, context: string, provider: Ai
 
 // 4. Chat (Chinese Roleplay)
 export const createChatSession = (provider: AiProvider, systemInstruction: string): ChatSession => {
-  const instruction = systemInstruction + " 請使用繁體中文進行對話。";
+  const instruction = systemInstruction + " 請使用標準書面語 (Standard Written Chinese) 進行主要回答。若涉及口語教學，可適量使用口語。";
   
   if (provider === 'deepseek') {
     let history: {role: string, content: string}[] = [];
